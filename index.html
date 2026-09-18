@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>Inventory Management Stock</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2224%22 fill=%22%2315803D%22/><text x=%2250%22 y=%2266%22 font-size=%2246%22 fill=%22white%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-weight=%22700%22>SO</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.5/sweetalert2.min.css">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ======================= AUTH SCREEN ======================= -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-visual">
+    <div class="auth-visual-inner">
+      <div class="brand-mark">
+        <span class="brand-icon"><span class="material-symbols-outlined">inventory_2</span></span>
+        <span class="brand-name">Inventory Management Stock</span>
+      </div>
+      <h1>Kelola stok masuk, keluar, dan opname dari satu tempat.</h1>
+      <p>Multi gudang, multi lokasi — catat barang masuk &amp; keluar, transfer antar gudang, dan stock opname, dengan Qty Stock yang selalu akurat secara real-time.</p>
+      <div class="auth-stat-row">
+        <div class="auth-stat">
+          <span class="auth-stat-value">2.477</span>
+          <span class="auth-stat-label">SKU aktif</span>
+        </div>
+        <div class="auth-stat">
+          <span class="auth-stat-value">3.221</span>
+          <span class="auth-stat-label">Lokasi terpetakan</span>
+        </div>
+        <div class="auth-stat">
+          <span class="auth-stat-value">99,1%</span>
+          <span class="auth-stat-label">Akurasi rata-rata</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-form-wrap">
+    <div class="auth-form-card">
+
+      <form id="loginForm" class="auth-form">
+        <div class="auth-form-head">
+          <h2>Masuk ke akun Anda</h2>
+          <p>Gunakan email kerja yang terdaftar pada gudang Anda.</p>
+        </div>
+        <label class="field">
+          <span class="field-label">Email</span>
+          <input type="email" id="loginEmail" placeholder="nama@perusahaan.co.id" value="herdi.purnama@gudangku.co.id" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Kata sandi</span>
+          <input type="password" id="loginPassword" placeholder="••••••••" value="soaccurate123" required />
+        </label>
+        <div class="field-row-between">
+          <label class="checkbox-inline"><input type="checkbox" checked> Ingat saya</label>
+          <a href="#" class="link-muted">Lupa kata sandi?</a>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Masuk</button>
+        <p class="auth-switch">Belum punya akun? <a href="#" id="showRegister">Daftar sekarang</a></p>
+        <p class="auth-hint">Prototipe UI/UX — masuk dengan role apa pun untuk melihat tampilan Admin atau Operator.</p>
+        <div class="role-preview-row">
+          <button type="button" class="chip chip-role active" data-role="Admin">Coba sebagai Admin</button>
+          <button type="button" class="chip chip-role" data-role="Operator">Coba sebagai Operator</button>
+        </div>
+      </form>
+
+      <form id="registerForm" class="auth-form hidden">
+        <div class="auth-form-head">
+          <h2>Buat akun baru</h2>
+          <p>Konfirmasi email dinonaktifkan — setelah daftar Anda bisa langsung masuk.</p>
+        </div>
+        <label class="field">
+          <span class="field-label">Nama lengkap</span>
+          <input type="text" placeholder="Nama Anda" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Email</span>
+          <input type="email" placeholder="nama@perusahaan.co.id" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Kata sandi</span>
+          <input type="password" placeholder="Minimal 8 karakter" required />
+        </label>
+        <button type="submit" class="btn btn-primary btn-block">Daftar &amp; Masuk</button>
+        <p class="auth-switch">Sudah punya akun? <a href="#" id="showLogin">Masuk di sini</a></p>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- ======================= APP SHELL ======================= -->
+<div id="appShell" class="app-shell hidden">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon"><span class="material-symbols-outlined">inventory_2</span></span>
+      <div class="brand-text">
+        <span class="brand-name-lg" id="sidebarBrandName">Inventory Management Stock</span>
+        <span class="brand-sub">Warehouse Control</span>
+      </div>
+      <button class="sidebar-close" id="sidebarClose"><span class="material-symbols-outlined">close</span></button>
+    </div>
+
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button class="nav-item active" data-page="dashboard">
+        <span class="material-symbols-outlined">donut_large</span> Dashboard
+      </button>
+      <button class="nav-item" data-page="stock-gudang">
+        <span class="material-symbols-outlined">inventory</span> Stock Gudang
+      </button>
+      <button class="nav-item" data-page="input-so">
+        <span class="material-symbols-outlined">fact_check</span> Input Stock Opname
+      </button>
+      <button class="nav-item" data-page="barang-masuk">
+        <span class="material-symbols-outlined">move_to_inbox</span> Input Barang Masuk
+      </button>
+      <button class="nav-item" data-page="barang-keluar">
+        <span class="material-symbols-outlined">outbox</span> Input Barang Keluar
+      </button>
+      <button class="nav-item" data-page="transfer-gudang">
+        <span class="material-symbols-outlined">sync_alt</span> Transfer Antar Gudang
+      </button>
+      <button class="nav-item" data-page="transfer-lokasi">
+        <span class="material-symbols-outlined">compare_arrows</span> Transfer Antar Lokasi
+      </button>
+      <button class="nav-item" data-page="laporan-stock">
+        <span class="material-symbols-outlined">receipt_long</span> Laporan Stock
+      </button>
+      <button class="nav-item" data-page="rekap">
+        <span class="material-symbols-outlined">summarize</span> Rekap SO
+      </button>
+      <button class="nav-item" data-page="master">
+        <span class="material-symbols-outlined">database</span> Master Data
+      </button>
+      <button class="nav-item" data-page="audit" data-admin-only="1">
+        <span class="material-symbols-outlined">history</span> Audit Log
+      </button>
+      <button class="nav-item" data-page="settings" data-admin-only="1">
+        <span class="material-symbols-outlined">settings</span> Pengaturan
+      </button>
+    </nav>
+
+    <div class="sidebar-cta">
+      <div class="sidebar-cta-icon"><span class="material-symbols-outlined">qr_code_scanner</span></div>
+      <p class="sidebar-cta-title">Mulai Hitung Fisik</p>
+      <p class="sidebar-cta-desc">Input SO baru langsung dari lantai gudang.</p>
+      <button class="btn btn-dark btn-block" id="sidebarInputBtn">+ Input SO Baru</button>
+    </div>
+  </aside>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <div class="main-col">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="icon-btn only-mobile" id="menuToggle"><span class="material-symbols-outlined">menu</span></button>
+        <div>
+          <div class="topbar-badges" id="topbarBadges">
+            <span class="pill pill-soft-green"><span class="material-symbols-outlined pill-ic">bolt</span> Stok Sehat</span>
+            <span class="pill pill-soft-gray" id="topbarDate">September 2026</span>
+            <span class="pill pill-soft-blue"><span class="material-symbols-outlined pill-ic">cloud_done</span> Tersambung Supabase</span>
+          </div>
+          <h1 class="topbar-title" id="pageTitle">Dashboard</h1>
+          <p class="topbar-subtitle" id="pageSubtitle">Masuk sebagai <b id="topbarUserEmail">herdi.purnama@gudangku.co.id</b></p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost only-desktop" id="btnLogout"><span class="material-symbols-outlined">logout</span> Keluar</button>
+        <button class="icon-btn" id="btnNotif"><span class="material-symbols-outlined">notifications</span></button>
+        <button class="avatar-btn" id="btnAvatar">
+          <span class="avatar-circle" id="avatarInitial">HP</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="content" id="pageContent">
+
+      <!-- ================= DASHBOARD ================= -->
+      <section class="page active" id="page-dashboard">
+        <div class="dash-toggle" id="dashToggle">
+          <button class="dash-toggle-btn active" data-dash="utama">Dashboard Utama</button>
+          <button class="dash-toggle-btn" data-dash="so">Dashboard SO</button>
+        </div>
+
+        <!-- ============ DASHBOARD UTAMA ============ -->
+        <div class="dash-view active" id="dashboardUtamaView">
+          <div class="filter-bar" id="dashUtamaFilterBar">
+            <select class="select-pill" id="duPeriode">
+              <option value="7">7 hari terakhir</option>
+              <option value="30" selected>30 hari terakhir</option>
+              <option value="90">90 hari terakhir</option>
+            </select>
+            <select class="select-pill" id="duGudang">
+              <option value="all">Semua Gudang</option>
+            </select>
+          </div>
+
+          <div class="hero-card">
+            <div class="hero-tags"><span class="pill pill-solid-white"><span class="material-symbols-outlined pill-ic">insights</span> Ringkasan Inventory</span></div>
+            <h2 class="hero-title">Kondisi Stok Keseluruhan</h2>
+            <p class="hero-desc" id="duHeroDesc">Memuat ringkasan…</p>
+            <button class="btn btn-solid-white" id="duGotoStockGudang">Lihat Stock Gudang<span class="material-symbols-outlined">arrow_forward</span></button>
+          </div>
+
+          <div class="kpi-grid" id="duKpiGrid"></div>
+
+          <div class="charts-grid">
+            <div class="chart-card span-2">
+              <div class="chart-card-head"><h3>Tren Barang Masuk vs Keluar — 7 Hari Terakhir</h3></div>
+              <div class="chart-canvas-wrap"><canvas id="chartInOutTrend"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-head"><h3>Distribusi Stok per Kategori</h3></div>
+              <div class="chart-canvas-wrap chart-canvas-donut"><canvas id="chartKategoriDonut"></canvas></div>
+              <div class="chart-legend" id="legendKategoriDonut"></div>
+            </div>
+
+            <div class="chart-card span-2">
+              <div class="chart-card-head"><h3>Qty Stock per Gudang</h3></div>
+              <div class="chart-canvas-wrap"><canvas id="chartQtyPerGudang"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-card-head"><h3>Top 10 SKU — Qty Terbanyak</h3></div>
+              <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chartTopStokSku"></canvas></div>
+            </div>
+          </div>
+
+          <div class="card table-card" style="margin-bottom:20px;">
+            <div class="card-head">
+              <h3>Stok Menipis / Kosong</h3>
+              <span class="text-muted-sm">Posisi dengan Qty Stock rendah — perlu perhatian</span>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="lowStockTable">
+                <thead><tr><th>SKU</th><th>Nama Produk</th><th>Lokasi</th><th>Gudang</th><th>Qty Stock</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <div class="card-head">
+              <h3>Aktivitas Terbaru</h3>
+              <span class="text-muted-sm">Gabungan seluruh transaksi — SO, Barang Masuk/Keluar, Transfer</span>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="activityTable">
+                <thead><tr><th>Waktu</th><th>Jenis</th><th>SKU</th><th>Lokasi</th><th>Qty</th><th>Keterangan</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ DASHBOARD SO (existing) ============ -->
+        <div class="dash-view" id="dashboardSoView">
+        <div class="filter-bar" id="dashFilterBar">
+          <select class="select-pill" id="filterPeriode">
+            <option value="7">7 hari terakhir</option>
+            <option value="30" selected>30 hari terakhir</option>
+            <option value="90">90 hari terakhir</option>
+          </select>
+          <select class="select-pill" id="filterGudang">
+            <option value="all">Semua Gudang</option>
+          </select>
+          <select class="select-pill" id="filterOperator">
+            <option value="all">Semua Operator</option>
+          </select>
+          <select class="select-pill" id="filterJenisLokasi">
+            <option value="all">Semua Jenis Lokasi</option>
+          </select>
+        </div>
+
+        <div class="hero-card">
+          <div class="hero-tags">
+            <span class="pill pill-solid-white"><span class="material-symbols-outlined pill-ic">calendar_month</span> Periode Berjalan</span>
+          </div>
+          <h2 class="hero-title">Progress Stock Opname Bulan Ini</h2>
+          <p class="hero-desc" id="heroDesc">Memuat ringkasan progress…</p>
+          <div class="hero-progress-track">
+            <div class="hero-progress-fill" id="heroProgressFill" style="width:0%"></div>
+          </div>
+          <div class="hero-progress-labels">
+            <span id="heroProgressLabel">0% selesai</span>
+            <span id="heroProgressTarget">0 dari 0 target</span>
+          </div>
+          <button class="btn btn-solid-white" id="heroGotoRekap">Lihat Rekap Detail<span class="material-symbols-outlined">arrow_forward</span></button>
+        </div>
+
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="charts-grid">
+          <div class="chart-card span-2">
+            <div class="chart-card-head"><h3>Tren Akurasi Stock — 7 Hari Terakhir</h3></div>
+            <div class="chart-canvas-wrap"><canvas id="chartTrend"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-head"><h3>Status SO</h3></div>
+            <div class="chart-canvas-wrap chart-canvas-donut"><canvas id="chartStatusDonut"></canvas></div>
+            <div class="chart-legend" id="legendStatusDonut"></div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-head"><h3>Akurasi per Operator</h3></div>
+            <div class="chart-canvas-wrap"><canvas id="chartOperator"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-head"><h3>Distribusi Hasil SO</h3></div>
+            <div class="chart-canvas-wrap chart-canvas-donut"><canvas id="chartDistribution"></canvas></div>
+            <div class="chart-legend" id="legendDistribution"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-head"><h3>Distribusi Level Akurasi</h3></div>
+            <div class="chart-canvas-wrap"><canvas id="chartAccuracyLevel"></canvas></div>
+          </div>
+
+          <div class="chart-card span-2">
+            <div class="chart-card-head"><h3>Top 10 SKU — Variance Terbesar</h3></div>
+            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chartTopSku"></canvas></div>
+          </div>
+          <div class="chart-card span-2">
+            <div class="chart-card-head"><h3>Top 10 Lokasi — Variance Terbesar</h3></div>
+            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chartTopLokasi"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card table-card">
+          <div class="card-head">
+            <h3>Perlu Perhatian</h3>
+            <span class="text-muted-sm">SKU/lokasi dengan selisih berulang atau belum pernah di-SO pada periode aktif</span>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table" id="attentionTable">
+              <thead>
+                <tr><th>SKU</th><th>Nama Produk</th><th>Lokasi</th><th>Gudang</th><th>Status</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <!-- ================= STOCK GUDANG ================= -->
+      <section class="page" id="page-stock-gudang">
+        <div class="page-header">
+          <p class="page-header-sub">Posisi stok saat ini per SKU dan lokasi — sumbernya dari seluruh riwayat mutasi (ledger).</p>
+          <div class="page-header-actions">
+            <button class="btn btn-outline" id="btnExportStockCsv"><span class="material-symbols-outlined">download</span> Export XLSX</button>
+            <button class="btn btn-outline" id="btnExportStockPdf"><span class="material-symbols-outlined">picture_as_pdf</span> Export PDF</button>
+          </div>
+        </div>
+
+        <div class="card filter-card">
+          <div class="form-grid form-grid-4">
+            <label class="field"><span class="field-label">Stok per Tanggal</span><input type="date" id="sgTanggal"></label>
+            <label class="field"><span class="field-label">Cari SKU / Nama Produk</span><input type="text" id="sgSkuSearch" placeholder="Ketik SKU atau nama…"></label>
+            <label class="field"><span class="field-label">Cari Lokasi</span><input type="text" id="sgLokasiSearch" placeholder="Ketik kode/nama lokasi…"></label>
+            <label class="field"><span class="field-label">Gudang</span><select id="sgGudang"><option value="all">Semua Gudang</option></select></label>
+            <label class="field"><span class="field-label">Jenis Lokasi</span><select id="sgJenisLokasi"><option value="all">Semua Jenis</option></select></label>
+            <label class="field"><span class="field-label">Kategori Barang</span><select id="sgKategori"><option value="all">Semua Kategori</option></select></label>
+            <label class="field"><span class="field-label">Qty Min</span><input type="number" id="sgQtyMin" placeholder="0"></label>
+            <label class="field"><span class="field-label">Qty Max</span><input type="number" id="sgQtyMax" placeholder="Tanpa batas"></label>
+          </div>
+          <div class="form-actions" style="margin-top:2px;">
+            <span class="text-muted-sm">Tanggal kosong = posisi stok hari ini</span>
+            <button class="btn btn-outline" id="btnResetFilterStock">Reset Filter</button>
+          </div>
+        </div>
+
+        <div class="summary-grid" id="stockSummaryGrid"></div>
+
+        <div class="card table-card">
+          <div class="table-scroll">
+            <table class="data-table" id="stockGudangTable">
+              <thead>
+                <tr>
+                  <th>No</th><th>SKU</th><th>Nama Produk</th><th>Kategori</th><th>Lokasi</th>
+                  <th>Jenis Lokasi</th><th>Gudang</th><th>Qty Stok</th><th>Update Terakhir</th><th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="pagination-bar" id="stockGudangPagination"></div>
+        </div>
+      </section>
+
+      <!-- ================= INPUT SO ================= -->
+      <section class="page" id="page-input-so">
+        <div class="page-header">
+          <p class="page-header-sub">Cari lokasi &amp; SKU, masukkan hasil hitung fisik, sistem menghitung selisih otomatis.</p>
+        </div>
+
+        <div class="input-so-grid">
+          <div class="card input-so-card">
+            <form id="formSO">
+              <div class="form-grid form-grid-3">
+                <label class="field">
+                  <span class="field-label">Tanggal</span>
+                  <input type="date" id="soTanggal" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">Gudang</span>
+                  <select id="soGudang" required></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Operator</span>
+                  <select id="soOperator" required></select>
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field combo-field">
+                  <span class="field-label">Lokasi <span class="req">*</span></span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">location_on</span>
+                    <input type="text" id="soLokasiInput" placeholder="Cari kode / nama lokasi…" autocomplete="off" required />
+                  </div>
+                  <div class="combo-dropdown" id="soLokasiDropdown"></div>
+                </label>
+                <label class="field combo-field">
+                  <span class="field-label">SKU <span class="req">*</span></span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">qr_code_2</span>
+                    <input type="text" id="soSkuInput" placeholder="Cari SKU / nama produk…" autocomplete="off" required />
+                  </div>
+                  <div class="combo-dropdown" id="soSkuDropdown"></div>
+                </label>
+              </div>
+
+              <div class="lookup-result" id="soLookupResult">
+                <div class="lookup-empty" id="soLookupEmpty">
+                  <span class="material-symbols-outlined">inventory_2</span>
+                  Pilih lokasi dan SKU untuk memuat nama produk dan Qty System
+                </div>
+                <div class="lookup-filled hidden" id="soLookupFilled">
+                  <div class="lookup-product">
+                    <span class="lookup-thumb material-symbols-outlined">package_2</span>
+                    <div>
+                      <p class="lookup-name" id="soLookupName">—</p>
+                      <p class="lookup-meta" id="soLookupMeta">—</p>
+                    </div>
+                  </div>
+                  <div class="lookup-qty-box">
+                    <span class="lookup-qty-label">Qty System</span>
+                    <span class="lookup-qty-value" id="soQtySystem">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field">
+                  <span class="field-label">Qty Fisik <span class="req">*</span></span>
+                  <input type="number" id="soQtyFisik" min="0" placeholder="0" required />
+                </label>
+                <div class="field">
+                  <span class="field-label">Selisih &amp; Status</span>
+                  <div class="selisih-box" id="soSelisihBox">
+                    <span class="selisih-value" id="soSelisihValue">0</span>
+                    <span class="badge badge-neutral" id="soStatusBadge">Menunggu input</span>
+                  </div>
+                </div>
+              </div>
+
+              <label class="field">
+                <span class="field-label">Catatan <span class="req hidden" id="soCatatanReq">*</span></span>
+                <textarea id="soCatatan" rows="2" placeholder="Wajib diisi jika terjadi selisih…"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button type="button" class="btn btn-outline" id="btnScan"><span class="material-symbols-outlined">qr_code_scanner</span> Scan Barcode</button>
+                <div class="form-actions-right">
+                  <button type="submit" class="btn btn-secondary" data-mode="save">Simpan</button>
+                  <button type="submit" class="btn btn-primary" data-mode="save-next">Simpan &amp; Input Berikutnya</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <aside class="card input-so-feed">
+            <div class="card-head"><h3>Input Hari Ini</h3><span class="badge badge-info" id="todayCount">0</span></div>
+            <div class="feed-list" id="todayInputList"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ================= INPUT BARANG MASUK ================= -->
+      <section class="page" id="page-barang-masuk">
+        <div class="page-header">
+          <p class="page-header-sub">Catat penerimaan barang dari supplier — menambah Qty Stock secara otomatis.</p>
+          <div class="page-header-actions">
+            <button class="btn btn-outline" id="btnImportBarangMasuk"><span class="material-symbols-outlined">upload_file</span> Import Massal</button>
+          </div>
+        </div>
+
+        <div class="input-so-grid">
+          <div class="card input-so-card">
+            <form id="formBarangMasuk">
+              <div class="form-grid form-grid-4">
+                <label class="field">
+                  <span class="field-label">Tanggal</span>
+                  <input type="date" id="bmTanggal" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">Gudang</span>
+                  <select id="bmGudang" required></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Operator</span>
+                  <select id="bmOperator" required></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Supplier <span class="req">*</span></span>
+                  <select id="bmSupplier" required></select>
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field combo-field">
+                  <span class="field-label">Lokasi Penyimpanan <span class="req">*</span></span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">location_on</span>
+                    <input type="text" id="bmLokasiInput" placeholder="Cari kode / nama lokasi…" autocomplete="off" required />
+                  </div>
+                  <div class="combo-dropdown" id="bmLokasiDropdown"></div>
+                </label>
+                <label class="field combo-field">
+                  <span class="field-label">SKU <span class="req">*</span></span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">qr_code_2</span>
+                    <input type="text" id="bmSkuInput" placeholder="Cari SKU / nama produk…" autocomplete="off" required />
+                  </div>
+                  <div class="combo-dropdown" id="bmSkuDropdown"></div>
+                </label>
+              </div>
+
+              <div class="lookup-result" id="bmLookupResult">
+                <div class="lookup-empty" id="bmLookupEmpty">
+                  <span class="material-symbols-outlined">inventory_2</span>
+                  Pilih lokasi dan SKU untuk melihat Qty Stok saat ini
+                </div>
+                <div class="lookup-filled hidden" id="bmLookupFilled">
+                  <div class="lookup-product">
+                    <span class="lookup-thumb material-symbols-outlined">package_2</span>
+                    <div>
+                      <p class="lookup-name" id="bmLookupName">—</p>
+                      <p class="lookup-meta" id="bmLookupMeta">—</p>
+                    </div>
+                  </div>
+                  <div class="lookup-qty-box">
+                    <span class="lookup-qty-label">Qty Stok Saat Ini</span>
+                    <span class="lookup-qty-value" id="bmQtyCurrent">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field">
+                  <span class="field-label">Qty Masuk <span class="req">*</span></span>
+                  <input type="number" id="bmQtyMasuk" min="1" placeholder="0" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">No Referensi / Faktur</span>
+                  <input type="text" id="bmNoRef" placeholder="Nomor surat jalan / faktur (opsional)" />
+                </label>
+              </div>
+
+              <label class="field">
+                <span class="field-label">Catatan</span>
+                <textarea id="bmCatatan" rows="2" placeholder="Catatan tambahan (opsional)…"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <div></div>
+                <div class="form-actions-right">
+                  <button type="submit" class="btn btn-secondary" data-mode="save">Simpan</button>
+                  <button type="submit" class="btn btn-primary" data-mode="save-next">Simpan &amp; Input Berikutnya</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <aside class="card input-so-feed">
+            <div class="card-head"><h3>Input Hari Ini</h3><span class="badge badge-info" id="bmTodayCount">0</span></div>
+            <div class="feed-list" id="bmTodayInputList"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ================= INPUT BARANG KELUAR ================= -->
+      <section class="page" id="page-barang-keluar">
+        <div class="page-header">
+          <p class="page-header-sub">Catat pengeluaran barang untuk customer — mengurangi Qty Stock, ditolak otomatis jika melebihi stok tersedia.</p>
+          <div class="page-header-actions">
+            <button class="btn btn-outline" id="btnImportBarangKeluar"><span class="material-symbols-outlined">upload_file</span> Import Massal</button>
+          </div>
+        </div>
+
+        <div class="input-so-grid">
+          <div class="card input-so-card">
+            <form id="formBarangKeluar">
+              <div class="form-grid form-grid-4">
+                <label class="field">
+                  <span class="field-label">Tanggal</span>
+                  <input type="date" id="bkTanggal" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">Gudang</span>
+                  <select id="bkGudang" required></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Operator</span>
+                  <select id="bkOperator" required></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Customer <span class="req">*</span></span>
+                  <select id="bkCustomer" required></select>
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field combo-field">
+                  <span class="field-label">Lokasi Pengambilan <span class="req">*</span></span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">location_on</span>
+                    <input type="text" id="bkLokasiInput" placeholder="Cari kode / nama lokasi…" autocomplete="off" required />
+                  </div>
+                  <div class="combo-dropdown" id="bkLokasiDropdown"></div>
+                </label>
+                <label class="field combo-field">
+                  <span class="field-label">SKU <span class="req">*</span></span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">qr_code_2</span>
+                    <input type="text" id="bkSkuInput" placeholder="Cari SKU / nama produk…" autocomplete="off" required />
+                  </div>
+                  <div class="combo-dropdown" id="bkSkuDropdown"></div>
+                </label>
+              </div>
+
+              <div class="lookup-result" id="bkLookupResult">
+                <div class="lookup-empty" id="bkLookupEmpty">
+                  <span class="material-symbols-outlined">inventory_2</span>
+                  Pilih lokasi dan SKU untuk melihat Qty Stok yang tersedia
+                </div>
+                <div class="lookup-filled hidden" id="bkLookupFilled">
+                  <div class="lookup-product">
+                    <span class="lookup-thumb material-symbols-outlined">package_2</span>
+                    <div>
+                      <p class="lookup-name" id="bkLookupName">—</p>
+                      <p class="lookup-meta" id="bkLookupMeta">—</p>
+                    </div>
+                  </div>
+                  <div class="lookup-qty-box">
+                    <span class="lookup-qty-label">Qty Stok Tersedia</span>
+                    <span class="lookup-qty-value" id="bkQtyCurrent">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field">
+                  <span class="field-label">Qty Keluar <span class="req">*</span></span>
+                  <input type="number" id="bkQtyKeluar" min="1" placeholder="0" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">No Referensi / Surat Jalan</span>
+                  <input type="text" id="bkNoRef" placeholder="Nomor surat jalan (opsional)" />
+                </label>
+              </div>
+              <p class="text-muted-sm hidden" id="bkStockWarning" style="color:var(--danger);font-weight:600;margin-top:-8px;margin-bottom:10px;"></p>
+
+              <label class="field">
+                <span class="field-label">Catatan</span>
+                <textarea id="bkCatatan" rows="2" placeholder="Catatan tambahan (opsional)…"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <div></div>
+                <div class="form-actions-right">
+                  <button type="submit" class="btn btn-secondary" data-mode="save">Simpan</button>
+                  <button type="submit" class="btn btn-primary" data-mode="save-next">Simpan &amp; Input Berikutnya</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <aside class="card input-so-feed">
+            <div class="card-head"><h3>Input Hari Ini</h3><span class="badge badge-info" id="bkTodayCount">0</span></div>
+            <div class="feed-list" id="bkTodayInputList"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ================= TRANSFER ANTAR GUDANG ================= -->
+      <section class="page" id="page-transfer-gudang">
+        <div class="page-header">
+          <p class="page-header-sub">Pindahkan stok antar gudang — memotong stok di gudang asal dan menambah di gudang tujuan sekaligus.</p>
+        </div>
+
+        <div class="input-so-grid">
+          <div class="card input-so-card">
+            <form id="formTransferGudang">
+              <div class="form-grid form-grid-3">
+                <label class="field"><span class="field-label">Tanggal</span><input type="date" id="tgTanggal" required /></label>
+                <label class="field"><span class="field-label">Operator</span><select id="tgOperator" required></select></label>
+                <label class="field combo-field">
+                  <span class="field-label">SKU <span class="req">*</span></span>
+                  <div class="combo-box"><span class="material-symbols-outlined combo-ic">qr_code_2</span>
+                    <input type="text" id="tgSkuInput" placeholder="Cari SKU / nama produk…" autocomplete="off" required /></div>
+                  <div class="combo-dropdown" id="tgSkuDropdown"></div>
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field"><span class="field-label">Gudang Asal <span class="req">*</span></span><select id="tgGudangAsal" required></select></label>
+                <label class="field"><span class="field-label">Gudang Tujuan <span class="req">*</span></span><select id="tgGudangTujuan" required></select></label>
+              </div>
+              <div class="form-grid form-grid-2">
+                <label class="field combo-field">
+                  <span class="field-label">Lokasi Asal <span class="req">*</span></span>
+                  <div class="combo-box"><span class="material-symbols-outlined combo-ic">location_on</span>
+                    <input type="text" id="tgLokasiAsalInput" placeholder="Cari kode / nama lokasi…" autocomplete="off" required /></div>
+                  <div class="combo-dropdown" id="tgLokasiAsalDropdown"></div>
+                </label>
+                <label class="field combo-field">
+                  <span class="field-label">Lokasi Tujuan <span class="req">*</span></span>
+                  <div class="combo-box"><span class="material-symbols-outlined combo-ic">location_on</span>
+                    <input type="text" id="tgLokasiTujuanInput" placeholder="Cari kode / nama lokasi…" autocomplete="off" required /></div>
+                  <div class="combo-dropdown" id="tgLokasiTujuanDropdown"></div>
+                </label>
+              </div>
+
+              <div class="lookup-result" id="tgLookupResult">
+                <div class="lookup-empty" id="tgLookupEmpty">
+                  <span class="material-symbols-outlined">inventory_2</span>
+                  Pilih SKU dan Lokasi Asal untuk melihat Qty Stok yang tersedia
+                </div>
+                <div class="lookup-filled hidden" id="tgLookupFilled">
+                  <div class="lookup-product">
+                    <span class="lookup-thumb material-symbols-outlined">package_2</span>
+                    <div><p class="lookup-name" id="tgLookupName">—</p><p class="lookup-meta" id="tgLookupMeta">—</p></div>
+                  </div>
+                  <div class="lookup-qty-box"><span class="lookup-qty-label">Qty Stok Tersedia</span><span class="lookup-qty-value" id="tgQtyCurrent">0</span></div>
+                </div>
+              </div>
+
+              <label class="field"><span class="field-label">Qty Transfer <span class="req">*</span></span><input type="number" id="tgQty" min="1" placeholder="0" required /></label>
+              <p class="text-muted-sm hidden" id="tgStockWarning" style="color:var(--danger);font-weight:600;margin-top:-8px;margin-bottom:10px;"></p>
+
+              <label class="field"><span class="field-label">Catatan</span><textarea id="tgCatatan" rows="2" placeholder="Catatan tambahan (opsional)…"></textarea></label>
+
+              <div class="form-actions">
+                <div></div>
+                <div class="form-actions-right">
+                  <button type="submit" class="btn btn-secondary" data-mode="save">Simpan</button>
+                  <button type="submit" class="btn btn-primary" data-mode="save-next">Simpan &amp; Input Berikutnya</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <aside class="card input-so-feed">
+            <div class="card-head"><h3>Input Hari Ini</h3><span class="badge badge-info" id="tgTodayCount">0</span></div>
+            <div class="feed-list" id="tgTodayInputList"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ================= TRANSFER ANTAR LOKASI ================= -->
+      <section class="page" id="page-transfer-lokasi">
+        <div class="page-header">
+          <p class="page-header-sub">Pindahkan stok antar lokasi dalam satu gudang yang sama — misalnya konsolidasi atau rapikan rak.</p>
+        </div>
+
+        <div class="input-so-grid">
+          <div class="card input-so-card">
+            <form id="formTransferLokasi">
+              <div class="form-grid form-grid-2">
+                <label class="field"><span class="field-label">Tanggal</span><input type="date" id="tlTanggal" required /></label>
+                <label class="field"><span class="field-label">Operator</span><select id="tlOperator" required></select></label>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field combo-field">
+                  <span class="field-label">SKU <span class="req">*</span></span>
+                  <div class="combo-box"><span class="material-symbols-outlined combo-ic">qr_code_2</span>
+                    <input type="text" id="tlSkuInput" placeholder="Cari SKU / nama produk…" autocomplete="off" required /></div>
+                  <div class="combo-dropdown" id="tlSkuDropdown"></div>
+                </label>
+                <label class="field combo-field">
+                  <span class="field-label">Lokasi Asal <span class="req">*</span></span>
+                  <div class="combo-box"><span class="material-symbols-outlined combo-ic">location_on</span>
+                    <input type="text" id="tlLokasiAsalInput" placeholder="Cari kode / nama lokasi…" autocomplete="off" required /></div>
+                  <div class="combo-dropdown" id="tlLokasiAsalDropdown"></div>
+                </label>
+              </div>
+
+              <label class="field combo-field">
+                <span class="field-label">Lokasi Tujuan <span class="req">*</span> <span class="text-muted-sm">(harus gudang yang sama dengan Lokasi Asal)</span></span>
+                <div class="combo-box"><span class="material-symbols-outlined combo-ic">location_on</span>
+                  <input type="text" id="tlLokasiTujuanInput" placeholder="Pilih Lokasi Asal dahulu…" autocomplete="off" required disabled /></div>
+                <div class="combo-dropdown" id="tlLokasiTujuanDropdown"></div>
+              </label>
+
+              <div class="lookup-result" id="tlLookupResult">
+                <div class="lookup-empty" id="tlLookupEmpty">
+                  <span class="material-symbols-outlined">inventory_2</span>
+                  Pilih SKU dan Lokasi Asal untuk melihat Qty Stok yang tersedia
+                </div>
+                <div class="lookup-filled hidden" id="tlLookupFilled">
+                  <div class="lookup-product">
+                    <span class="lookup-thumb material-symbols-outlined">package_2</span>
+                    <div><p class="lookup-name" id="tlLookupName">—</p><p class="lookup-meta" id="tlLookupMeta">—</p></div>
+                  </div>
+                  <div class="lookup-qty-box"><span class="lookup-qty-label">Qty Stok Tersedia</span><span class="lookup-qty-value" id="tlQtyCurrent">0</span></div>
+                </div>
+              </div>
+
+              <label class="field"><span class="field-label">Qty Transfer <span class="req">*</span></span><input type="number" id="tlQty" min="1" placeholder="0" required /></label>
+              <p class="text-muted-sm hidden" id="tlStockWarning" style="color:var(--danger);font-weight:600;margin-top:-8px;margin-bottom:10px;"></p>
+
+              <label class="field"><span class="field-label">Catatan</span><textarea id="tlCatatan" rows="2" placeholder="Catatan tambahan (opsional)…"></textarea></label>
+
+              <div class="form-actions">
+                <div></div>
+                <div class="form-actions-right">
+                  <button type="submit" class="btn btn-secondary" data-mode="save">Simpan</button>
+                  <button type="submit" class="btn btn-primary" data-mode="save-next">Simpan &amp; Input Berikutnya</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <aside class="card input-so-feed">
+            <div class="card-head"><h3>Input Hari Ini</h3><span class="badge badge-info" id="tlTodayCount">0</span></div>
+            <div class="feed-list" id="tlTodayInputList"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ================= LAPORAN STOCK (Kartu Stok) ================= -->
+      <section class="page" id="page-laporan-stock">
+        <div class="page-header">
+          <p class="page-header-sub">Kartu stok — riwayat mutasi lengkap per SKU dengan saldo berjalan (Saldo Awal, Barang Masuk/Keluar, Transfer, Koreksi SO).</p>
+          <div class="page-header-actions">
+            <button class="btn btn-outline" id="btnExportKartuCsv"><span class="material-symbols-outlined">download</span> Export XLSX</button>
+            <button class="btn btn-outline" id="btnExportKartuPdf"><span class="material-symbols-outlined">picture_as_pdf</span> Export PDF</button>
+          </div>
+        </div>
+
+        <div class="card filter-card">
+          <div class="form-grid form-grid-4">
+            <label class="field combo-field">
+              <span class="field-label">SKU <span class="req">*</span></span>
+              <div class="combo-box"><span class="material-symbols-outlined combo-ic">qr_code_2</span>
+                <input type="text" id="ksSkuInput" placeholder="Cari SKU / nama produk…" autocomplete="off" /></div>
+              <div class="combo-dropdown" id="ksSkuDropdown"></div>
+            </label>
+            <label class="field combo-field">
+              <span class="field-label">Lokasi <span class="text-muted-sm">(kosongkan untuk semua lokasi)</span></span>
+              <div class="combo-box"><span class="material-symbols-outlined combo-ic">location_on</span>
+                <input type="text" id="ksLokasiInput" placeholder="Semua lokasi…" autocomplete="off" /></div>
+              <div class="combo-dropdown" id="ksLokasiDropdown"></div>
+            </label>
+            <label class="field"><span class="field-label">Tanggal Mulai</span><input type="date" id="ksTglMulai"></label>
+            <label class="field"><span class="field-label">Tanggal Akhir</span><input type="date" id="ksTglAkhir"></label>
+          </div>
+          <div class="form-actions" style="margin-top:2px;">
+            <span class="text-muted-sm">Pilih SKU untuk menampilkan kartu stoknya</span>
+            <button class="btn btn-outline" id="btnResetFilterKartu">Reset Filter</button>
+          </div>
+        </div>
+
+        <div id="ksEmptyState" class="card" style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+          <span class="material-symbols-outlined" style="font-size:36px;color:var(--text-faint);">receipt_long</span>
+          <p style="margin-top:10px;">Pilih SKU di atas untuk melihat kartu stoknya.</p>
+        </div>
+
+        <div id="ksContent" class="hidden">
+          <div class="summary-grid" id="kartuSummaryGrid"></div>
+          <div class="card table-card">
+            <div class="table-scroll">
+              <table class="data-table" id="kartuStokTable">
+                <thead>
+                  <tr><th>Tanggal</th><th>Jenis</th><th>No Dokumen</th><th>Lokasi</th><th>Masuk</th><th>Keluar</th><th>Saldo</th><th>Keterangan</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="pagination-bar" id="kartuPagination"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= REKAP SO ================= -->
+      <section class="page" id="page-rekap">
+        <div class="page-header">
+          <p class="page-header-sub">Filter, telusuri, dan ekspor seluruh hasil stock opname.</p>
+          <div class="page-header-actions">
+            <button class="btn btn-outline" id="btnExportCsv"><span class="material-symbols-outlined">download</span> Export XLSX</button>
+            <button class="btn btn-outline" id="btnExportPdf"><span class="material-symbols-outlined">picture_as_pdf</span> Export PDF</button>
+          </div>
+        </div>
+
+        <div class="card filter-card">
+          <div class="form-grid form-grid-4">
+            <label class="field"><span class="field-label">Tanggal Mulai</span><input type="date" id="rkTglMulai"></label>
+            <label class="field"><span class="field-label">Tanggal Akhir</span><input type="date" id="rkTglAkhir"></label>
+            <label class="field"><span class="field-label">Operator</span><select id="rkOperator"><option value="all">Semua Operator</option></select></label>
+            <label class="field"><span class="field-label">Status</span>
+              <select id="rkStatus">
+                <option value="all">Semua Status</option>
+                <option value="Sesuai">Sesuai</option>
+                <option value="Selisih Plus">Selisih Plus</option>
+                <option value="Selisih Minus">Selisih Minus</option>
+              </select>
+            </label>
+            <label class="field"><span class="field-label">Gudang</span><select id="rkGudang"><option value="all">Semua Gudang</option></select></label>
+            <label class="field"><span class="field-label">Jenis Lokasi</span><select id="rkJenisLokasi"><option value="all">Semua Jenis</option></select></label>
+            <label class="field"><span class="field-label">Cari SKU / Nama / Lokasi</span>
+              <input type="text" id="rkSearch" placeholder="Ketik untuk mencari…">
+            </label>
+            <div class="field field-btn-align">
+              <button class="btn btn-outline btn-block" id="btnResetFilterRekap">Reset Filter</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-grid" id="rekapSummaryGrid"></div>
+
+        <div class="card table-card">
+          <div class="table-scroll">
+            <table class="data-table" id="rekapTable">
+              <thead>
+                <tr>
+                  <th>No</th><th>Tanggal</th><th>No SO</th><th>SKU</th><th>Nama Produk</th>
+                  <th>Lokasi</th><th>Gudang</th><th>Operator</th><th>Qty System</th>
+                  <th>Qty Fisik</th><th>Selisih</th><th>Status</th><th>Catatan</th><th>Waktu</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="pagination-bar" id="rekapPagination"></div>
+        </div>
+      </section>
+
+      <!-- ================= MASTER DATA ================= -->
+      <section class="page" id="page-master">
+        <div class="page-header">
+          <p class="page-header-sub">Kelola data acuan barang, lokasi, dan staff.</p>
+        </div>
+
+        <div class="tab-bar" id="masterTabBar">
+          <button class="tab-item active" data-tab="barang"><span class="material-symbols-outlined">inventory_2</span> Barang</button>
+          <button class="tab-item" data-tab="lokasi"><span class="material-symbols-outlined">location_on</span> Lokasi</button>
+          <button class="tab-item" data-tab="gudang"><span class="material-symbols-outlined">warehouse</span> Gudang</button>
+          <button class="tab-item" data-tab="staff"><span class="material-symbols-outlined">badge</span> Staff</button>
+          <button class="tab-item" data-tab="supplier"><span class="material-symbols-outlined">local_shipping</span> Supplier</button>
+          <button class="tab-item" data-tab="customer"><span class="material-symbols-outlined">groups</span> Customer</button>
+        </div>
+
+        <!-- BARANG -->
+        <div class="tab-panel active" id="tab-barang">
+          <div class="card">
+            <div class="toolbar">
+              <div class="combo-box toolbar-search">
+                <span class="material-symbols-outlined combo-ic">search</span>
+                <input type="text" id="barangSearch" placeholder="Cari SKU atau nama produk…">
+              </div>
+              <select class="select-pill" id="barangKategoriFilter"><option value="all">Semua Kategori</option></select>
+              <div class="toolbar-actions">
+                <button class="btn btn-outline" id="btnImportBarang"><span class="material-symbols-outlined">upload_file</span> Import</button>
+                <button class="btn btn-primary" id="btnAddBarang"><span class="material-symbols-outlined">add</span> Tambah Barang</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="barangTable">
+                <thead><tr><th>SKU</th><th>SKU Induk</th><th>Nama Produk</th><th>Kategori</th><th>Unit</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="pagination-bar" id="barangPagination"></div>
+          </div>
+        </div>
+
+        <!-- LOKASI -->
+        <div class="tab-panel" id="tab-lokasi">
+          <div class="card">
+            <div class="toolbar">
+              <div class="combo-box toolbar-search">
+                <span class="material-symbols-outlined combo-ic">search</span>
+                <input type="text" id="lokasiSearch" placeholder="Cari kode atau nama lokasi…">
+              </div>
+              <select class="select-pill" id="lokasiGudangFilter"><option value="all">Semua Gudang</option></select>
+              <select class="select-pill" id="lokasiJenisFilter"><option value="all">Semua Jenis</option></select>
+              <div class="toolbar-actions">
+                <button class="btn btn-outline" id="btnImportLokasi"><span class="material-symbols-outlined">upload_file</span> Import</button>
+                <button class="btn btn-primary" id="btnAddLokasi"><span class="material-symbols-outlined">add</span> Tambah Lokasi</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="lokasiTable">
+                <thead><tr><th>Kode Lokasi</th><th>Nama Lokasi</th><th>Gudang</th><th>Jenis Lokasi</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="pagination-bar" id="lokasiPagination"></div>
+          </div>
+        </div>
+
+        <!-- GUDANG -->
+        <div class="tab-panel" id="tab-gudang">
+          <div class="card">
+            <div class="toolbar">
+              <div class="combo-box toolbar-search">
+                <span class="material-symbols-outlined combo-ic">search</span>
+                <input type="text" id="gudangSearch" placeholder="Cari kode atau nama gudang…">
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-primary" id="btnAddGudang"><span class="material-symbols-outlined">add</span> Tambah Gudang</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="gudangTable">
+                <thead><tr><th>Kode</th><th>Nama Gudang</th><th>PIC</th><th>Telepon</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAFF -->
+        <div class="tab-panel" id="tab-staff">
+          <div class="card">
+            <div class="toolbar">
+              <div class="combo-box toolbar-search">
+                <span class="material-symbols-outlined combo-ic">search</span>
+                <input type="text" id="staffSearch" placeholder="Cari nama atau email…">
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-primary" id="btnAddStaff"><span class="material-symbols-outlined">add</span> Tambah Staff</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="staffTable">
+                <thead><tr><th>Nama</th><th>Email</th><th>Role</th><th>Gudang</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUPPLIER -->
+        <div class="tab-panel" id="tab-supplier">
+          <div class="card">
+            <div class="toolbar">
+              <div class="combo-box toolbar-search">
+                <span class="material-symbols-outlined combo-ic">search</span>
+                <input type="text" id="supplierSearch" placeholder="Cari nama supplier…">
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-primary" id="btnAddSupplier"><span class="material-symbols-outlined">add</span> Tambah Supplier</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="supplierTable">
+                <thead><tr><th>Nama Supplier</th><th>Kontak</th><th>Telepon</th><th>Alamat</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CUSTOMER -->
+        <div class="tab-panel" id="tab-customer">
+          <div class="card">
+            <div class="toolbar">
+              <div class="combo-box toolbar-search">
+                <span class="material-symbols-outlined combo-ic">search</span>
+                <input type="text" id="customerSearch" placeholder="Cari nama customer…">
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-primary" id="btnAddCustomer"><span class="material-symbols-outlined">add</span> Tambah Customer</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table" id="customerTable">
+                <thead><tr><th>Nama Customer</th><th>Kontak</th><th>Telepon</th><th>Alamat</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= AUDIT LOG ================= -->
+      <section class="page" id="page-audit">
+        <div class="page-header">
+          <p class="page-header-sub">Riwayat aktivitas sensitif — bersifat baca-saja dan tidak dapat dihapus dari UI.</p>
+        </div>
+        <div class="card filter-card">
+          <div class="form-grid form-grid-4">
+            <label class="field"><span class="field-label">Modul</span><select id="auditModule"><option value="all">Semua Modul</option></select></label>
+            <label class="field"><span class="field-label">Aksi</span><select id="auditAction"><option value="all">Semua Aksi</option></select></label>
+            <label class="field"><span class="field-label">User</span><select id="auditUser"><option value="all">Semua User</option></select></label>
+            <label class="field"><span class="field-label">Cari</span><input type="text" id="auditSearch" placeholder="Cari detail aktivitas…"></label>
+          </div>
+        </div>
+        <div class="card table-card">
+          <div class="table-scroll">
+            <table class="data-table" id="auditTable">
+              <thead><tr><th>Waktu</th><th>User</th><th>Aksi</th><th>Modul</th><th>Detail</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SETTINGS ================= -->
+      <section class="page" id="page-settings">
+        <div class="page-header">
+          <p class="page-header-sub">Identitas perusahaan, preferensi sistem, ringkasan master data, hak akses menu, dan reset data terjadwal — semuanya diatur dari sini.</p>
+        </div>
+
+        <div class="settings-grid">
+          <form class="card settings-card" id="formCompany">
+            <div class="card-head"><h3>Informasi Perusahaan</h3></div>
+            <div class="form-grid form-grid-2">
+              <label class="field"><span class="field-label">Nama Perusahaan</span><input type="text" id="setCompanyName"></label>
+              <label class="field"><span class="field-label">Nama Aplikasi</span><input type="text" id="setAppName"></label>
+            </div>
+            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+          </form>
+
+          <form class="card settings-card" id="formPreferensi">
+            <div class="card-head"><h3>Preferensi Sistem</h3></div>
+            <div class="form-grid form-grid-2">
+              <label class="field"><span class="field-label">Gudang Utama (Default)</span><select id="setDefaultGudang"></select></label>
+              <label class="field"><span class="field-label">Periode Default Dashboard</span>
+                <select id="setDefaultPeriod">
+                  <option value="7">7 hari</option>
+                  <option value="30">30 hari</option>
+                  <option value="90">90 hari</option>
+                </select>
+              </label>
+            </div>
+            <label class="field"><span class="field-label">Ambang Batas "Stok Menipis"</span><input type="number" id="setLowStockThreshold" min="0" placeholder="mis. 5"></label>
+            <button type="submit" class="btn btn-primary">Simpan Preferensi</button>
+          </form>
+
+          <div class="card settings-card">
+            <div class="card-head">
+              <h3>Ringkasan Master Data</h3>
+              <span class="text-muted-sm">Kelola datanya di menu Master Data</span>
+            </div>
+            <div class="master-summary-grid" id="masterSummaryGrid"></div>
+          </div>
+
+          <div class="card settings-card">
+            <div class="card-head"><h3>Hak Akses Menu per Role</h3></div>
+            <div class="table-scroll">
+              <table class="data-table permission-table" id="permissionTable"></table>
+            </div>
+          </div>
+
+          <div class="card settings-card settings-danger">
+            <div class="card-head"><h3><span class="material-symbols-outlined">warning</span> Reset Data Terjadwal</h3></div>
+            <p class="text-muted-sm">Reset dibatasi berdasarkan cakupan tertentu — tidak tersedia opsi hapus seluruh database dari sini. Menghapus data SO juga otomatis membersihkan mutasi ledger terkait, supaya Qty Stock tidak jadi salah.</p>
+            <div class="form-grid form-grid-2">
+              <label class="field"><span class="field-label">Cakupan Reset</span>
+                <select id="resetScope">
+                  <option value="periode">Berdasarkan Periode</option>
+                  <option value="gudang">Berdasarkan Gudang</option>
+                  <option value="operator">Berdasarkan Operator</option>
+                  <option value="dokumen">Berdasarkan Dokumen SO</option>
+                </select>
+              </label>
+              <label class="field"><span class="field-label">Nilai Cakupan</span><input type="text" id="resetScopeValue" placeholder="mis. 30 hari terakhir"></label>
+            </div>
+            <button class="btn btn-danger" id="btnResetData">Reset Data Terpilih</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.5/sweetalert2.all.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
