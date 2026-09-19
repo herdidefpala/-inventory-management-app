@@ -628,6 +628,7 @@ function renderActivityTable(gudangFilter){
 }
 
 function renderDashUtamaCharts(f, positions){
+  if (!chartsAvailable()) return;
   const palette = ['#0D9488','#16A34A','#2563EB','#F59E0B','#DC2626','#7C3AED','#DB2777','#0EA5E9'];
 
   const days = [...Array(7)].map((_,i)=> daysAgoStr(6-i));
@@ -754,7 +755,25 @@ function renderAttentionTable(balances, doneKeys, items){
 
 function destroyChart(id){ if (charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
+// Chart.js is loaded from a CDN (index.html); if that request ever fails
+// (flaky network, blocked by an extension, CDN hiccup) `Chart` stays
+// undefined and `new Chart(...)` throws, which used to abort whatever
+// caller was mid-render (including the silent session-restore flow on
+// page load). Both chart-rendering functions below check this first so a
+// failed CDN load degrades to a clear message instead of a crash.
+function chartsAvailable(){
+  if (typeof Chart !== 'undefined') return true;
+  console.warn('Chart.js belum termuat (gagal dimuat dari CDN) — grafik dilewati untuk render ini.');
+  document.querySelectorAll('.chart-canvas-wrap').forEach(wrap=>{
+    if (!wrap.querySelector('.chart-load-error')){
+      wrap.insertAdjacentHTML('beforeend', `<div class="chart-load-error" style="display:flex;align-items:center;justify-content:center;height:100%;min-height:120px;color:var(--text-muted);font-size:13px;text-align:center;padding:16px;">Gagal memuat library grafik.<br>Coba muat ulang halaman.</div>`);
+    }
+  });
+  return false;
+}
+
 function renderDashboardCharts(f, items, sesuai, plus, minus, sudahCount, belumCount){
+  if (!chartsAvailable()) return;
   const palette = ['#0D9488','#16A34A','#2563EB','#F59E0B','#DC2626','#7C3AED','#DB2777','#0EA5E9'];
 
   // Trend 7 hari
