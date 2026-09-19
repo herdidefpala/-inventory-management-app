@@ -262,6 +262,7 @@ input:focus, select:focus, textarea:focus{ border-color: var(--primary); }
 .topbar-title{ font-size:26px; font-weight:800; }
 .topbar-subtitle{ font-size:13px; color:var(--text-muted); margin-top:4px; }
 .topbar-right{ display:flex; align-items:center; gap:10px; }
+.topbar-username{ font-size:13px; font-weight:600; color:var(--text-muted); white-space:nowrap; max-width:130px; overflow:hidden; text-overflow:ellipsis; }
 .avatar-btn{ border:none; background:none; }
 .avatar-circle{
   width:40px; height:40px; border-radius:50%; background: var(--primary); color:#fff;
@@ -496,6 +497,8 @@ input:focus, select:focus, textarea:focus{ border-color: var(--primary); }
   .sidebar-backdrop.show{ display:block; }
   .only-mobile{ display:flex; }
   .only-desktop{ display:none; }
+  .btn-label-desktop{ display:none; }
+  .topbar-username{ max-width:64px; font-size:12px; }
   .topbar{ padding:18px 18px 8px; }
   .content{ padding:0 18px 32px; }
   .topbar-title{ font-size:21px; }
