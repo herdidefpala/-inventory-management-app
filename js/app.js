@@ -195,18 +195,13 @@ function hasAnyMovement(skuId, locId){
 
 /* ==========================================================================
    AUTH
+   Real Supabase Auth. `staff` table rows are linked to auth.users via
+   auth_user_id (see the on_auth_user_created trigger in
+   supabase_auth_trigger.sql) — signing in fetches that row to get the
+   person's role, name, and warehouse.
    ========================================================================== */
 
 function initAuth(){
-  const roleChips = document.querySelectorAll('.chip-role');
-  roleChips.forEach(chip=>{
-    chip.addEventListener('click', ()=>{
-      roleChips.forEach(c=>c.classList.remove('active'));
-      chip.classList.add('active');
-      ui.role = chip.dataset.role;
-    });
-  });
-
   document.getElementById('showRegister').addEventListener('click', (e)=>{
     e.preventDefault();
     document.getElementById('loginForm').classList.add('hidden');
@@ -220,36 +215,120 @@ function initAuth(){
 
   document.getElementById('loginForm').addEventListener('submit', (e)=>{
     e.preventDefault();
-    // SUPABASE: await supabase.auth.signInWithPassword({ email, password })
-    signInAs(ui.role);
+    handleLogin();
   });
 
   document.getElementById('registerForm').addEventListener('submit', (e)=>{
     e.preventDefault();
-    // SUPABASE: await supabase.auth.signUp({ email, password }) — email confirmation disabled per PRD §5
-    toast('Akun dibuat — langsung masuk');
-    signInAs('Admin');
+    handleRegister();
   });
+
+  checkExistingSession();
 }
 
-function signInAs(role){
-  ui.role = role;
-  ui.currentUser = role === 'Admin'
-    ? state.staff.find(s=>s.role==='Admin')
-    : state.staff.find(s=>s.role==='Operator' && s.is_active);
+function setFormBusy(formId, busy, busyLabel, idleLabel){
+  const btn = document.querySelector(`#${formId} button[type=submit]`);
+  btn.disabled = busy;
+  btn.textContent = busy ? busyLabel : idleLabel;
+}
+
+async function loadStaffForUser(authUser){
+  let staffRow, error;
+  try {
+    ({ data: staffRow, error } = await supabaseClient
+      .from('staff')
+      .select('*')
+      .eq('auth_user_id', authUser.id)
+      .maybeSingle());
+  } catch(e){
+    Swal.fire({ icon:'error', title:'Tidak bisa terhubung', text:'Gagal mengambil data staff, coba lagi.' });
+    return false;
+  }
+
+  if (error || !staffRow){
+    await supabaseClient.auth.signOut();
+    Swal.fire({ icon:'error', title:'Akun belum terhubung', text:'Akun ini belum tertaut ke data staff — hubungi admin.' });
+    return false;
+  }
+
+  ui.role = staffRow.role;
+  ui.currentUser = staffRow;
+
+  // Bridge into the still-local staff array (Master Data/Staff and the rest of
+  // the app haven't migrated off it yet — that's Sub-Fase 3) so a brand-new
+  // sign-up shows up correctly everywhere right away.
+  const existing = state.staff.find(s=>s.id===staffRow.id);
+  if (existing) Object.assign(existing, staffRow); else state.staff.push(staffRow);
+  rebuildIndexes();
 
   document.getElementById('authScreen').classList.add('hidden');
   document.getElementById('appShell').classList.remove('hidden');
-  document.getElementById('topbarUserEmail').textContent = ui.currentUser.email;
+  document.getElementById('topbarUserName').textContent = ui.currentUser.name;
   document.getElementById('avatarInitial').textContent = initials(ui.currentUser.name);
-
   document.querySelectorAll('[data-admin-only]').forEach(el=>{
-    el.style.display = role === 'Admin' ? '' : 'none';
+    el.style.display = ui.role === 'Admin' ? '' : 'none';
   });
 
-  logAudit('LOGIN', 'Auth', `Login sebagai ${role} (${ui.currentUser.name})`);
+  logAudit('LOGIN', 'Auth', `Login sebagai ${ui.role} (${ui.currentUser.name})`);
   saveState();
   goToPage('dashboard');
+  return true;
+}
+
+async function checkExistingSession(){
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) await loadStaffForUser(session.user);
+  } catch(e){
+    console.error('checkExistingSession failed', e);
+  }
+}
+
+async function handleLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  setFormBusy('loginForm', true, 'Memproses…', 'Masuk');
+
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error){
+      Swal.fire({ icon:'error', title:'Tidak bisa masuk', text: error.message.includes('Invalid') ? 'Email atau kata sandi salah.' : error.message });
+      return;
+    }
+    await loadStaffForUser(data.user);
+  } catch(e){
+    Swal.fire({ icon:'error', title:'Tidak bisa terhubung', text:'Gagal menghubungi server, coba lagi.' });
+  } finally {
+    setFormBusy('loginForm', false, 'Memproses…', 'Masuk');
+  }
+}
+
+async function handleRegister(){
+  const name = document.getElementById('registerName').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  setFormBusy('registerForm', true, 'Memproses…', 'Daftar & Masuk');
+
+  try {
+    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { name } } });
+    if (error){
+      Swal.fire({ icon:'error', title:'Tidak bisa daftar', text: error.message });
+      return;
+    }
+    if (!data.session){
+      // Project has "Confirm email" turned on — no usable session yet.
+      Swal.fire({ icon:'info', title:'Cek email Anda', text:'Klik link konfirmasi yang dikirim ke email Anda, lalu masuk di sini.' });
+      document.getElementById('registerForm').classList.add('hidden');
+      document.getElementById('loginForm').classList.remove('hidden');
+      return;
+    }
+    toast('Akun dibuat');
+    await loadStaffForUser(data.user);
+  } catch(e){
+    Swal.fire({ icon:'error', title:'Tidak bisa terhubung', text:'Gagal menghubungi server, coba lagi.' });
+  } finally {
+    setFormBusy('registerForm', false, 'Memproses…', 'Daftar & Masuk');
+  }
 }
 
 function logout(){
@@ -259,9 +338,9 @@ function logout(){
     icon:'question', showCancelButton:true,
     confirmButtonText:'Ya, keluar', cancelButtonText:'Batal',
     confirmButtonColor:'#DC2626'
-  }).then(res=>{
+  }).then(async res=>{
     if (res.isConfirmed){
-      // SUPABASE: await supabase.auth.signOut()
+      try { await supabaseClient.auth.signOut(); } catch(e){ console.error('signOut failed', e); }
       document.getElementById('appShell').classList.add('hidden');
       document.getElementById('authScreen').classList.remove('hidden');
       document.getElementById('loginForm').classList.remove('hidden');
@@ -293,7 +372,6 @@ function goToPage(page){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'page-'+page));
   document.getElementById('pageTitle').textContent = PAGE_META[page][0];
-  document.getElementById('pageSubtitle').innerHTML = PAGE_META[page][1] + ' — Masuk sebagai <b>'+ui.currentUser.email+'</b>';
   closeMobileSidebar();
 
   if (page==='dashboard') renderCurrentDashboard();
