@@ -62,29 +62,25 @@
         </div>
         <button type="submit" class="btn btn-primary btn-block">Masuk</button>
         <p class="auth-switch">Belum punya akun? <a href="#" id="showRegister">Daftar sekarang</a></p>
-        <p class="auth-hint">Prototipe UI/UX — masuk dengan role apa pun untuk melihat tampilan Admin atau Operator.</p>
-        <div class="role-preview-row">
-          <button type="button" class="chip chip-role active" data-role="Admin">Coba sebagai Admin</button>
-          <button type="button" class="chip chip-role" data-role="Operator">Coba sebagai Operator</button>
-        </div>
+        <p class="auth-hint">Belum pernah daftar? Gunakan email &amp; kata sandi di atas pada form Daftar — kalau emailnya cocok dengan data staff yang sudah ada, peran Admin/Operator-nya otomatis mengikuti.</p>
       </form>
 
       <form id="registerForm" class="auth-form hidden">
         <div class="auth-form-head">
           <h2>Buat akun baru</h2>
-          <p>Konfirmasi email dinonaktifkan — setelah daftar Anda bisa langsung masuk.</p>
+          <p>Kalau email Anda cocok dengan data staff yang sudah ada, akun otomatis terhubung ke peran (Admin/Operator) yang sudah ditentukan.</p>
         </div>
         <label class="field">
           <span class="field-label">Nama lengkap</span>
-          <input type="text" placeholder="Nama Anda" required />
+          <input type="text" id="registerName" placeholder="Nama Anda" required />
         </label>
         <label class="field">
           <span class="field-label">Email</span>
-          <input type="email" placeholder="nama@perusahaan.co.id" required />
+          <input type="email" id="registerEmail" placeholder="nama@perusahaan.co.id" required />
         </label>
         <label class="field">
           <span class="field-label">Kata sandi</span>
-          <input type="password" placeholder="Minimal 8 karakter" required />
+          <input type="password" id="registerPassword" placeholder="Minimal 6 karakter" required minlength="6" />
         </label>
         <button type="submit" class="btn btn-primary btn-block">Daftar &amp; Masuk</button>
         <p class="auth-switch">Sudah punya akun? <a href="#" id="showLogin">Masuk di sini</a></p>
@@ -1198,6 +1194,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.5/sweetalert2.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>
