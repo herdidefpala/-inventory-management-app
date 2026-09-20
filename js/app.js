@@ -393,7 +393,6 @@ function initNav(){
     btn.addEventListener('click', ()=> goToPage(btn.dataset.page));
   });
   document.getElementById('btnLogout').addEventListener('click', logout);
-  document.getElementById('sidebarInputBtn').addEventListener('click', ()=> goToPage('input-so'));
   document.getElementById('heroGotoRekap').addEventListener('click', ()=> goToPage('rekap'));
   document.getElementById('btnNotif').addEventListener('click', ()=>{
     Swal.fire({icon:'info', title:'Notifikasi', text:'Belum ada notifikasi baru.'});
