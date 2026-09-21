@@ -232,6 +232,26 @@ function setFormBusy(formId, busy, busyLabel, idleLabel){
   btn.textContent = busy ? busyLabel : idleLabel;
 }
 
+async function loadMasterDataFromSupabase(){
+  // SUPABASE: warehouses/skus/locations/suppliers/customers now live in
+  // real tables (Fase 1–3 Master Data sudah selesai di Supabase — lihat
+  // schema dump). Fetch each so every device sees the same rows instead of
+  // the local SEED_* fallback in data.js. On error, keep whatever state.X
+  // already had (seed/localStorage) rather than blanking that section out.
+  const [wh, sk, loc, sup, cus] = await Promise.all([
+    supabaseClient.from('warehouses').select('*'),
+    supabaseClient.from('skus').select('*'),
+    supabaseClient.from('locations').select('*'),
+    supabaseClient.from('suppliers').select('*'),
+    supabaseClient.from('customers').select('*'),
+  ]);
+  if (wh.error) console.error('Gagal memuat warehouses dari Supabase', wh.error); else state.warehouses = wh.data;
+  if (sk.error) console.error('Gagal memuat skus dari Supabase', sk.error); else state.skus = sk.data;
+  if (loc.error) console.error('Gagal memuat locations dari Supabase', loc.error); else state.locations = loc.data;
+  if (sup.error) console.error('Gagal memuat suppliers dari Supabase', sup.error); else state.suppliers = sup.data;
+  if (cus.error) console.error('Gagal memuat customers dari Supabase', cus.error); else state.customers = cus.data;
+}
+
 async function loadStaffForUser(authUser){
   let staffRow, error;
   try {
@@ -259,6 +279,11 @@ async function loadStaffForUser(authUser){
   // sign-up shows up correctly everywhere right away.
   const existing = state.staff.find(s=>s.id===staffRow.id);
   if (existing) Object.assign(existing, staffRow); else state.staff.push(staffRow);
+
+  // SUPABASE: Master Data (Fase 1) — ambil warehouses/skus/locations/
+  // suppliers/customers yang asli dari Supabase, lalu bangun ulang semua
+  // peta lookup (mWh, mSku, mLoc, dst) sekali saja setelah semuanya siap.
+  await loadMasterDataFromSupabase();
   rebuildIndexes();
 
   document.getElementById('authScreen').classList.add('hidden');
