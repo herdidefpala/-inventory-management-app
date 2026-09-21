@@ -371,7 +371,6 @@ const PAGE_META = {
 function goToPage(page){
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'page-'+page));
-  document.getElementById('pageTitle').textContent = PAGE_META[page][0];
   closeMobileSidebar();
 
   if (page==='dashboard') renderCurrentDashboard();
