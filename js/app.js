@@ -2774,20 +2774,28 @@ function renderCustomerTable(){
 }
 
 const MASTER_KIND_CONFIG = {
-  sku:      { arr:()=>state.skus,       label:'barang',   module:'Master Barang',   render:renderBarangTable },
-  lokasi:   { arr:()=>state.locations,  label:'lokasi',   module:'Master Lokasi',   render:renderLokasiTable },
-  gudang:   { arr:()=>state.warehouses, label:'gudang',   module:'Master Gudang',   render:renderGudangTable },
-  staff:    { arr:()=>state.staff,      label:'staff',    module:'Master Staff',    render:renderStaffTable },
-  supplier: { arr:()=>state.suppliers,  label:'supplier', module:'Master Supplier', render:renderSupplierTable },
-  customer: { arr:()=>state.customers,  label:'customer', module:'Master Customer', render:renderCustomerTable },
+  // `table` = nama tabel Supabase yang disinkronkan. null berarti masih
+  // local-only (staff belum dimigrasikan — itu Sub-Fase 3 tersendiri,
+  // karena butuh akun Supabase Auth yang sungguhan, bukan cuma baris data).
+  sku:      { arr:()=>state.skus,       label:'barang',   module:'Master Barang',   render:renderBarangTable,   table:'skus' },
+  lokasi:   { arr:()=>state.locations,  label:'lokasi',   module:'Master Lokasi',   render:renderLokasiTable,   table:'locations' },
+  gudang:   { arr:()=>state.warehouses, label:'gudang',   module:'Master Gudang',   render:renderGudangTable,   table:'warehouses' },
+  staff:    { arr:()=>state.staff,      label:'staff',    module:'Master Staff',    render:renderStaffTable,    table:null },
+  supplier: { arr:()=>state.suppliers,  label:'supplier', module:'Master Supplier', render:renderSupplierTable, table:'suppliers' },
+  customer: { arr:()=>state.customers,  label:'customer', module:'Master Customer', render:renderCustomerTable, table:'customers' },
 };
 
 function bindRowActions(kind){
   const cfg = MASTER_KIND_CONFIG[kind];
   document.querySelectorAll(`.toggle-status[data-kind="${kind}"]`).forEach(btn=>{
-    btn.addEventListener('click', ()=>{
+    btn.addEventListener('click', async ()=>{
       const item = cfg.arr().find(x=>x.id===btn.dataset.id);
-      item.is_active = !item.is_active;
+      const newStatus = !item.is_active;
+      if (cfg.table){
+        const { error } = await supabaseClient.from(cfg.table).update({ is_active:newStatus }).eq('id', item.id);
+        if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return; }
+      }
+      item.is_active = newStatus;
       logAudit('UPDATE', cfg.module, `Ubah status ${item.name||item.sku||item.code} menjadi ${item.is_active?'Aktif':'Nonaktif'}`);
       saveState();
       cfg.render();
@@ -2820,8 +2828,12 @@ function confirmDeleteMaster(kind, id){
   Swal.fire({
     title:`Hapus ${cfg.label} ini?`, text:'Data historis yang sudah tersimpan tidak akan terhapus.',
     icon:'warning', showCancelButton:true, confirmButtonText:'Ya, hapus', cancelButtonText:'Batal', confirmButtonColor:'#DC2626'
-  }).then(res=>{
+  }).then(async res=>{
     if (!res.isConfirmed) return;
+    if (cfg.table){
+      const { error } = await supabaseClient.from(cfg.table).delete().eq('id', id);
+      if (error){ toast('Gagal menghapus di server: '+error.message, 'error'); return; }
+    }
     const arr = cfg.arr();
     const idx = arr.findIndex(x=>x.id===id);
     if (idx>-1) arr.splice(idx,1);
@@ -2850,10 +2862,12 @@ function openModal(title, bodyHtml, onSubmit){
   const close = ()=> document.getElementById('modalRoot').innerHTML = '';
   document.getElementById('genericModalClose').addEventListener('click', close);
   document.getElementById('genericModalCancel').addEventListener('click', close);
-  document.getElementById('genericModalForm').addEventListener('submit', (e)=>{
+  document.getElementById('genericModalForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    onSubmit();
-    close();
+    const submitBtn = e.target.querySelector('button[type=submit]');
+    submitBtn.disabled = true;
+    const ok = await onSubmit();
+    if (ok !== false) { close(); } else { submitBtn.disabled = false; }
   });
 }
 
@@ -2872,15 +2886,23 @@ function openBarangModal(id){
       </label>
       <label class="field"><span class="field-label">Unit</span><input type="text" id="mSkuUnit" value="${editing?editing.unit:'Pcs'}"></label>
     </div>
-  `, ()=>{
+  `, async ()=>{
     const sku = document.getElementById('mSkuCode').value.trim();
     const nama = document.getElementById('mSkuNama').value.trim();
     if (!sku || !nama){ toast('SKU dan Nama Produk wajib diisi','warning'); return; }
+    const kategori = document.getElementById('mSkuKategori').value;
+    const unit = document.getElementById('mSkuUnit').value.trim()||'Pcs';
     if (editing){
-      Object.assign(editing, { sku, sku_induk:document.getElementById('mSkuInduk').value.trim(), nama_produk:nama, kategori:document.getElementById('mSkuKategori').value, unit:document.getElementById('mSkuUnit').value.trim()||'Pcs' });
+      const payload = { sku, sku_induk:document.getElementById('mSkuInduk').value.trim(), nama_produk:nama, kategori, unit };
+      const { error } = await supabaseClient.from('skus').update(payload).eq('id', editing.id);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      Object.assign(editing, payload);
       logAudit('UPDATE','Master Barang',`Mengubah data ${sku}`);
     } else {
-      state.skus.push({ id:'sku-'+Date.now(), sku, sku_induk:document.getElementById('mSkuInduk').value.trim(), nama_produk:nama, varian:'', kategori:document.getElementById('mSkuKategori').value, unit:document.getElementById('mSkuUnit').value.trim()||'Pcs', foto_url:'', is_active:true });
+      const row = { id:'sku-'+Date.now(), sku, sku_induk:document.getElementById('mSkuInduk').value.trim(), nama_produk:nama, varian:'', kategori, unit, foto_url:'', is_active:true };
+      const { error } = await supabaseClient.from('skus').insert(row);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      state.skus.push(row);
       logAudit('CREATE','Master Barang',`Menambahkan SKU baru ${sku}`);
     }
     rebuildIndexes(); saveState(); renderBarangTable(); populateSharedFilters();
@@ -2902,14 +2924,23 @@ function openLokasiModal(id){
     <label class="field"><span class="field-label">Jenis Lokasi</span>
       <select id="mLocType">${jenisOptions.map(j=>`<option ${editing&&editing.location_type===j?'selected':''}>${j}</option>`).join('')}</select>
     </label>
-  `, ()=>{
+  `, async ()=>{
     const code = document.getElementById('mLocCode').value.trim();
     if (!code){ toast('Kode Lokasi wajib diisi','warning'); return; }
+    const warehouse_id = document.getElementById('mLocWh').value;
+    const name = document.getElementById('mLocName').value.trim();
+    const location_type = document.getElementById('mLocType').value;
     if (editing){
-      Object.assign(editing, { code, warehouse_id:document.getElementById('mLocWh').value, name:document.getElementById('mLocName').value.trim(), location_type:document.getElementById('mLocType').value });
+      const payload = { code, warehouse_id, name, location_type };
+      const { error } = await supabaseClient.from('locations').update(payload).eq('id', editing.id);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      Object.assign(editing, payload);
       logAudit('UPDATE','Master Lokasi',`Mengubah data ${code}`);
     } else {
-      state.locations.push({ id:'loc-'+Date.now(), code, name:document.getElementById('mLocName').value.trim()||code, warehouse_id:document.getElementById('mLocWh').value, location_type:document.getElementById('mLocType').value, is_active:true });
+      const row = { id:'loc-'+Date.now(), code, name:name||code, warehouse_id, location_type, is_active:true };
+      const { error } = await supabaseClient.from('locations').insert(row);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      state.locations.push(row);
       logAudit('CREATE','Master Lokasi',`Menambahkan lokasi baru ${code}`);
     }
     rebuildIndexes(); saveState(); renderLokasiTable(); populateSharedFilters();
@@ -2958,15 +2989,24 @@ function openGudangModal(id){
       <label class="field"><span class="field-label">PIC</span><input type="text" id="mWhPic" value="${editing?(editing.pic||''):''}"></label>
       <label class="field"><span class="field-label">Telepon</span><input type="text" id="mWhPhone" value="${editing?(editing.phone||''):''}"></label>
     </div>
-  `, ()=>{
+  `, async ()=>{
     const code = document.getElementById('mWhCode').value.trim();
     const name = document.getElementById('mWhName').value.trim();
     if (!code || !name){ toast('Kode dan Nama Gudang wajib diisi','warning'); return; }
+    const address = document.getElementById('mWhAddress').value.trim();
+    const pic = document.getElementById('mWhPic').value.trim();
+    const phone = document.getElementById('mWhPhone').value.trim();
     if (editing){
-      Object.assign(editing, { code, name, address:document.getElementById('mWhAddress').value.trim(), pic:document.getElementById('mWhPic').value.trim(), phone:document.getElementById('mWhPhone').value.trim() });
+      const payload = { code, name, address, pic, phone };
+      const { error } = await supabaseClient.from('warehouses').update(payload).eq('id', editing.id);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      Object.assign(editing, payload);
       logAudit('UPDATE','Master Gudang',`Mengubah data ${code}`);
     } else {
-      state.warehouses.push({ id:'wh-'+Date.now(), code, name, address:document.getElementById('mWhAddress').value.trim(), pic:document.getElementById('mWhPic').value.trim(), phone:document.getElementById('mWhPhone').value.trim(), is_active:true });
+      const row = { id:'wh-'+Date.now(), code, name, address, pic, phone, is_active:true };
+      const { error } = await supabaseClient.from('warehouses').insert(row);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      state.warehouses.push(row);
       logAudit('CREATE','Master Gudang',`Menambahkan gudang baru ${code}`);
     }
     rebuildIndexes(); saveState(); renderGudangTable(); populateSharedFilters();
@@ -2983,14 +3023,23 @@ function openSupplierModal(id){
       <label class="field"><span class="field-label">Telepon</span><input type="text" id="mSupPhone" value="${editing?(editing.phone||''):''}"></label>
     </div>
     <label class="field"><span class="field-label">Alamat</span><input type="text" id="mSupAddress" value="${editing?(editing.address||''):''}"></label>
-  `, ()=>{
+  `, async ()=>{
     const name = document.getElementById('mSupName').value.trim();
     if (!name){ toast('Nama Supplier wajib diisi','warning'); return; }
+    const contact_person = document.getElementById('mSupContact').value.trim();
+    const phone = document.getElementById('mSupPhone').value.trim();
+    const address = document.getElementById('mSupAddress').value.trim();
     if (editing){
-      Object.assign(editing, { name, contact_person:document.getElementById('mSupContact').value.trim(), phone:document.getElementById('mSupPhone').value.trim(), address:document.getElementById('mSupAddress').value.trim() });
+      const payload = { name, contact_person, phone, address };
+      const { error } = await supabaseClient.from('suppliers').update(payload).eq('id', editing.id);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      Object.assign(editing, payload);
       logAudit('UPDATE','Master Supplier',`Mengubah data ${name}`);
     } else {
-      state.suppliers.push({ id:'sup-'+Date.now(), name, contact_person:document.getElementById('mSupContact').value.trim(), phone:document.getElementById('mSupPhone').value.trim(), address:document.getElementById('mSupAddress').value.trim(), is_active:true });
+      const row = { id:'sup-'+Date.now(), name, contact_person, phone, address, is_active:true };
+      const { error } = await supabaseClient.from('suppliers').insert(row);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      state.suppliers.push(row);
       logAudit('CREATE','Master Supplier',`Menambahkan supplier baru ${name}`);
     }
     rebuildIndexes(); saveState(); renderSupplierTable();
@@ -3007,14 +3056,23 @@ function openCustomerModal(id){
       <label class="field"><span class="field-label">Telepon</span><input type="text" id="mCusPhone" value="${editing?(editing.phone||''):''}"></label>
     </div>
     <label class="field"><span class="field-label">Alamat</span><input type="text" id="mCusAddress" value="${editing?(editing.address||''):''}"></label>
-  `, ()=>{
+  `, async ()=>{
     const name = document.getElementById('mCusName').value.trim();
     if (!name){ toast('Nama Customer wajib diisi','warning'); return; }
+    const contact_person = document.getElementById('mCusContact').value.trim();
+    const phone = document.getElementById('mCusPhone').value.trim();
+    const address = document.getElementById('mCusAddress').value.trim();
     if (editing){
-      Object.assign(editing, { name, contact_person:document.getElementById('mCusContact').value.trim(), phone:document.getElementById('mCusPhone').value.trim(), address:document.getElementById('mCusAddress').value.trim() });
+      const payload = { name, contact_person, phone, address };
+      const { error } = await supabaseClient.from('customers').update(payload).eq('id', editing.id);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      Object.assign(editing, payload);
       logAudit('UPDATE','Master Customer',`Mengubah data ${name}`);
     } else {
-      state.customers.push({ id:'cus-'+Date.now(), name, contact_person:document.getElementById('mCusContact').value.trim(), phone:document.getElementById('mCusPhone').value.trim(), address:document.getElementById('mCusAddress').value.trim(), is_active:true });
+      const row = { id:'cus-'+Date.now(), name, contact_person, phone, address, is_active:true };
+      const { error } = await supabaseClient.from('customers').insert(row);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      state.customers.push(row);
       logAudit('CREATE','Master Customer',`Menambahkan customer baru ${name}`);
     }
     rebuildIndexes(); saveState(); renderCustomerTable();
