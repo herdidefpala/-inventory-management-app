@@ -2858,13 +2858,14 @@ function renderCustomerTable(){
 }
 
 const MASTER_KIND_CONFIG = {
-  // `table` = nama tabel Supabase yang disinkronkan. null berarti masih
-  // local-only (staff belum dimigrasikan — itu Sub-Fase 3 tersendiri,
-  // karena butuh akun Supabase Auth yang sungguhan, bukan cuma baris data).
+  // `table` = nama tabel Supabase yang disinkronkan untuk edit/toggle/hapus
+  // baris yang SUDAH ADA. Staff kini ikut sync untuk operasi itu (Sub-Fase 3,
+  // langkah 2/3) — hanya MEMBUAT staff baru lewat tombol "Tambah Staff" yang
+  // masih local-only, karena itu butuh akun Supabase Auth sungguhan (langkah 3).
   sku:      { arr:()=>state.skus,       label:'barang',   module:'Master Barang',   render:renderBarangTable,   table:'skus' },
   lokasi:   { arr:()=>state.locations,  label:'lokasi',   module:'Master Lokasi',   render:renderLokasiTable,   table:'locations' },
   gudang:   { arr:()=>state.warehouses, label:'gudang',   module:'Master Gudang',   render:renderGudangTable,   table:'warehouses' },
-  staff:    { arr:()=>state.staff,      label:'staff',    module:'Master Staff',    render:renderStaffTable,    table:null },
+  staff:    { arr:()=>state.staff,      label:'staff',    module:'Master Staff',    render:renderStaffTable,    table:'staff' },
   supplier: { arr:()=>state.suppliers,  label:'supplier', module:'Master Supplier', render:renderSupplierTable, table:'suppliers' },
   customer: { arr:()=>state.customers,  label:'customer', module:'Master Customer', render:renderCustomerTable, table:'customers' },
 };
@@ -3045,14 +3046,19 @@ function openStaffModal(id){
         <select id="mStaffWh">${state.warehouses.map(w=>`<option value="${w.id}" ${editing&&editing.warehouse_id===w.id?'selected':''}>${w.name}</option>`).join('')}</select>
       </label>
     </div>
-  `, ()=>{
+  `, async ()=>{
     const name = document.getElementById('mStaffName').value.trim();
     const email = document.getElementById('mStaffEmail').value.trim();
     if (!name || !email){ toast('Nama dan email wajib diisi','warning'); return; }
     if (editing){
-      Object.assign(editing, { name, email, role:document.getElementById('mStaffRole').value, warehouse_id:document.getElementById('mStaffWh').value });
+      const payload = { name, email, role:document.getElementById('mStaffRole').value, warehouse_id:document.getElementById('mStaffWh').value };
+      const { error } = await supabaseClient.from('staff').update(payload).eq('id', editing.id);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      Object.assign(editing, payload);
       logAudit('UPDATE','Master Staff',`Mengubah data ${name}`);
     } else {
+      // Belum disambungkan ke Supabase (langkah 3) — staff baru butuh akun
+      // Auth sungguhan, bukan cuma baris data. Tetap local-only untuk saat ini.
       state.staff.push({ id:'staff-'+Date.now(), name, email, role:document.getElementById('mStaffRole').value, warehouse_id:document.getElementById('mStaffWh').value, is_active:true });
       logAudit('CREATE','Master Staff',`Menambahkan staff baru ${name}`);
     }
