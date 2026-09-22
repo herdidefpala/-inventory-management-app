@@ -1419,9 +1419,9 @@ function initBarangMasuk(){
   document.querySelectorAll('#formBarangMasuk button[type=submit]').forEach(btn=>{
     btn.addEventListener('click', ()=> submitMode = btn.dataset.mode);
   });
-  document.getElementById('formBarangMasuk').addEventListener('submit', (e)=>{
+  document.getElementById('formBarangMasuk').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    submitBarangMasuk(submitMode);
+    await submitBarangMasuk(submitMode);
   });
 }
 
@@ -1497,7 +1497,7 @@ function updateBmLookup(){
   document.getElementById('bmQtyCurrent').textContent = fmtNum(qty);
 }
 
-function submitBarangMasuk(mode){
+async function submitBarangMasuk(mode){
   if (!bmSelectedLocationId || !bmSelectedSkuId){
     toast('Pilih lokasi dan SKU terlebih dahulu', 'warning'); return;
   }
@@ -1514,8 +1514,7 @@ function submitBarangMasuk(mode){
   const catatan = document.getElementById('bmCatatan').value.trim();
   const noRef = document.getElementById('bmNoRef').value.trim();
 
-  state.bmCounter += 1;
-  const docNumber = `BM-${tanggal.replace(/-/g,'')}-${String(state.bmCounter).padStart(3,'0')}`;
+  const docNumber = `BM-${tanggal.replace(/-/g,'')}-${String(state.bmCounter+1).padStart(3,'0')}`;
 
   const item = {
     id: 'bmi-' + Date.now(), doc_number: docNumber, tanggal,
@@ -1524,14 +1523,20 @@ function submitBarangMasuk(mode){
     warehouse_id: loc.warehouse_id, qty, no_referensi: noRef, catatan,
     operator_id: document.getElementById('bmOperator').value,
   };
-  // SUPABASE: insert into barang_masuk_items
+  const { error } = await supabaseClient.from('barang_masuk_items').insert(item);
+  if (error){
+    console.error('Gagal menyimpan barang_masuk_items ke Supabase', error, item);
+    toast('Gagal menyimpan ke server: '+error.message, 'error');
+    return;
+  }
+  state.bmCounter += 1;
   state.barangMasukItems.unshift(item);
-  postMovement({
+  await postMovement({
     tipe:'IN', sku_id: bmSelectedSkuId, location_id: bmSelectedLocationId,
     qty, ref_type:'Barang Masuk', ref_doc: docNumber, supplier_id: supplierId,
     catatan: catatan || `Penerimaan dari ${safeSupplier(supplierId).name}`
   });
-  logAudit('CREATE', 'Barang Masuk', `${docNumber}: +${fmtNum(qty)} ${safeSku(bmSelectedSkuId).sku} @ ${loc.code} dari ${safeSupplier(supplierId).name}`);
+  await logAudit('CREATE', 'Barang Masuk', `${docNumber}: +${fmtNum(qty)} ${safeSku(bmSelectedSkuId).sku} @ ${loc.code} dari ${safeSupplier(supplierId).name}`);
   saveState();
   toast(`Tersimpan — ${docNumber}`);
 
@@ -1598,9 +1603,9 @@ function initBarangKeluar(){
   document.querySelectorAll('#formBarangKeluar button[type=submit]').forEach(btn=>{
     btn.addEventListener('click', ()=> submitMode = btn.dataset.mode);
   });
-  document.getElementById('formBarangKeluar').addEventListener('submit', (e)=>{
+  document.getElementById('formBarangKeluar').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    submitBarangKeluar(submitMode);
+    await submitBarangKeluar(submitMode);
   });
 }
 
@@ -1708,7 +1713,7 @@ function validateBkQty(){
   return true;
 }
 
-function submitBarangKeluar(mode){
+async function submitBarangKeluar(mode){
   if (!bkSelectedLocationId || !bkSelectedSkuId){
     toast('Pilih lokasi dan SKU terlebih dahulu', 'warning'); return;
   }
@@ -1731,8 +1736,7 @@ function submitBarangKeluar(mode){
   const catatan = document.getElementById('bkCatatan').value.trim();
   const noRef = document.getElementById('bkNoRef').value.trim();
 
-  state.bkCounter += 1;
-  const docNumber = `BK-${tanggal.replace(/-/g,'')}-${String(state.bkCounter).padStart(3,'0')}`;
+  const docNumber = `BK-${tanggal.replace(/-/g,'')}-${String(state.bkCounter+1).padStart(3,'0')}`;
 
   const item = {
     id: 'bki-' + Date.now(), doc_number: docNumber, tanggal,
@@ -1741,14 +1745,20 @@ function submitBarangKeluar(mode){
     warehouse_id: loc.warehouse_id, qty, no_referensi: noRef, catatan,
     operator_id: document.getElementById('bkOperator').value,
   };
-  // SUPABASE: insert into barang_keluar_items
+  const { error } = await supabaseClient.from('barang_keluar_items').insert(item);
+  if (error){
+    console.error('Gagal menyimpan barang_keluar_items ke Supabase', error, item);
+    toast('Gagal menyimpan ke server: '+error.message, 'error');
+    return;
+  }
+  state.bkCounter += 1;
   state.barangKeluarItems.unshift(item);
-  postMovement({
+  await postMovement({
     tipe:'OUT', sku_id: bkSelectedSkuId, location_id: bkSelectedLocationId,
     qty: -qty, ref_type:'Barang Keluar', ref_doc: docNumber, customer_id: customerId,
     catatan: catatan || `Pengeluaran untuk ${safeCustomer(customerId).name}`
   });
-  logAudit('CREATE', 'Barang Keluar', `${docNumber}: -${fmtNum(qty)} ${safeSku(bkSelectedSkuId).sku} @ ${loc.code} untuk ${safeCustomer(customerId).name}`);
+  await logAudit('CREATE', 'Barang Keluar', `${docNumber}: -${fmtNum(qty)} ${safeSku(bkSelectedSkuId).sku} @ ${loc.code} untuk ${safeCustomer(customerId).name}`);
   saveState();
   toast(`Tersimpan — ${docNumber}`);
 
@@ -1824,9 +1834,9 @@ function initTransferGudang(){
   document.querySelectorAll('#formTransferGudang button[type=submit]').forEach(btn=>{
     btn.addEventListener('click', ()=> submitMode = btn.dataset.mode);
   });
-  document.getElementById('formTransferGudang').addEventListener('submit', (e)=>{
+  document.getElementById('formTransferGudang').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    submitTransferGudang(submitMode);
+    await submitTransferGudang(submitMode);
   });
 }
 
@@ -1935,7 +1945,7 @@ function validateTgQty(){
   return true;
 }
 
-function submitTransferGudang(mode){
+async function submitTransferGudang(mode){
   if (!tgSelectedSkuId || !tgSelectedAsalId || !tgSelectedTujuanId){
     toast('Pilih SKU, Lokasi Asal, dan Lokasi Tujuan terlebih dahulu', 'warning'); return;
   }
@@ -1954,8 +1964,7 @@ function submitTransferGudang(mode){
   const srcLoc = mLoc[tgSelectedAsalId], destLoc = mLoc[tgSelectedTujuanId];
   const tanggal = document.getElementById('tgTanggal').value || todayStr();
   const catatan = document.getElementById('tgCatatan').value.trim();
-  state.tgCounter += 1;
-  const docNumber = `TG-${tanggal.replace(/-/g,'')}-${String(state.tgCounter).padStart(3,'0')}`;
+  const docNumber = `TG-${tanggal.replace(/-/g,'')}-${String(state.tgCounter+1).padStart(3,'0')}`;
 
   const item = {
     id: 'tgi-' + Date.now(), doc_number: docNumber, tanggal, waktu: new Date().toISOString().slice(0,19),
@@ -1963,11 +1972,17 @@ function submitTransferGudang(mode){
     dest_location_id: tgSelectedTujuanId, dest_warehouse_id: destLoc.warehouse_id,
     qty, catatan, operator_id: document.getElementById('tgOperator').value,
   };
-  // SUPABASE: insert into transfer_gudang_items
+  const { error } = await supabaseClient.from('transfer_gudang_items').insert(item);
+  if (error){
+    console.error('Gagal menyimpan transfer_gudang_items ke Supabase', error, item);
+    toast('Gagal menyimpan ke server: '+error.message, 'error');
+    return;
+  }
+  state.tgCounter += 1;
   state.transferGudangItems.unshift(item);
-  const outEntry = postMovement({ tipe:'TRANSFER_OUT', sku_id: tgSelectedSkuId, location_id: tgSelectedAsalId, qty:-qty, ref_type:'Transfer Antar Gudang', ref_doc: docNumber, catatan: catatan || `Transfer ke ${safeWh(destLoc.warehouse_id).name}` });
-  postMovement({ tipe:'TRANSFER_IN', sku_id: tgSelectedSkuId, location_id: tgSelectedTujuanId, qty, ref_type:'Transfer Antar Gudang', ref_doc: docNumber, related_movement_id: outEntry.id, catatan: catatan || `Transfer dari ${safeWh(srcLoc.warehouse_id).name}` });
-  logAudit('CREATE', 'Transfer Antar Gudang', `${docNumber}: ${fmtNum(qty)} ${safeSku(tgSelectedSkuId).sku} dari ${srcLoc.code} (${safeWh(srcLoc.warehouse_id).name}) ke ${destLoc.code} (${safeWh(destLoc.warehouse_id).name})`);
+  const outEntry = await postMovement({ tipe:'TRANSFER_OUT', sku_id: tgSelectedSkuId, location_id: tgSelectedAsalId, qty:-qty, ref_type:'Transfer Antar Gudang', ref_doc: docNumber, catatan: catatan || `Transfer ke ${safeWh(destLoc.warehouse_id).name}` });
+  await postMovement({ tipe:'TRANSFER_IN', sku_id: tgSelectedSkuId, location_id: tgSelectedTujuanId, qty, ref_type:'Transfer Antar Gudang', ref_doc: docNumber, related_movement_id: outEntry.id, catatan: catatan || `Transfer dari ${safeWh(srcLoc.warehouse_id).name}` });
+  await logAudit('CREATE', 'Transfer Antar Gudang', `${docNumber}: ${fmtNum(qty)} ${safeSku(tgSelectedSkuId).sku} dari ${srcLoc.code} (${safeWh(srcLoc.warehouse_id).name}) ke ${destLoc.code} (${safeWh(destLoc.warehouse_id).name})`);
   saveState();
   toast(`Tersimpan — ${docNumber}`);
 
@@ -2037,9 +2052,9 @@ function initTransferLokasi(){
   document.querySelectorAll('#formTransferLokasi button[type=submit]').forEach(btn=>{
     btn.addEventListener('click', ()=> submitMode = btn.dataset.mode);
   });
-  document.getElementById('formTransferLokasi').addEventListener('submit', (e)=>{
+  document.getElementById('formTransferLokasi').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    submitTransferLokasi(submitMode);
+    await submitTransferLokasi(submitMode);
   });
 }
 
@@ -2147,7 +2162,7 @@ function validateTlQty(){
   return true;
 }
 
-function submitTransferLokasi(mode){
+async function submitTransferLokasi(mode){
   if (!tlSelectedSkuId || !tlSelectedAsalId || !tlSelectedTujuanId){
     toast('Pilih SKU, Lokasi Asal, dan Lokasi Tujuan terlebih dahulu', 'warning'); return;
   }
@@ -2166,19 +2181,24 @@ function submitTransferLokasi(mode){
   const srcLoc = mLoc[tlSelectedAsalId], destLoc = mLoc[tlSelectedTujuanId];
   const tanggal = document.getElementById('tlTanggal').value || todayStr();
   const catatan = document.getElementById('tlCatatan').value.trim();
-  state.tlCounter += 1;
-  const docNumber = `TL-${tanggal.replace(/-/g,'')}-${String(state.tlCounter).padStart(3,'0')}`;
+  const docNumber = `TL-${tanggal.replace(/-/g,'')}-${String(state.tlCounter+1).padStart(3,'0')}`;
 
   const item = {
     id: 'tli-' + Date.now(), doc_number: docNumber, tanggal, waktu: new Date().toISOString().slice(0,19),
     sku_id: tlSelectedSkuId, source_location_id: tlSelectedAsalId, dest_location_id: tlSelectedTujuanId,
     warehouse_id: srcLoc.warehouse_id, qty, catatan, operator_id: document.getElementById('tlOperator').value,
   };
-  // SUPABASE: insert into transfer_lokasi_items
+  const { error } = await supabaseClient.from('transfer_lokasi_items').insert(item);
+  if (error){
+    console.error('Gagal menyimpan transfer_lokasi_items ke Supabase', error, item);
+    toast('Gagal menyimpan ke server: '+error.message, 'error');
+    return;
+  }
+  state.tlCounter += 1;
   state.transferLokasiItems.unshift(item);
-  const outEntry = postMovement({ tipe:'TRANSFER_OUT', sku_id: tlSelectedSkuId, location_id: tlSelectedAsalId, qty:-qty, ref_type:'Transfer Antar Lokasi', ref_doc: docNumber, catatan: catatan || `Transfer ke ${destLoc.code}` });
-  postMovement({ tipe:'TRANSFER_IN', sku_id: tlSelectedSkuId, location_id: tlSelectedTujuanId, qty, ref_type:'Transfer Antar Lokasi', ref_doc: docNumber, related_movement_id: outEntry.id, catatan: catatan || `Transfer dari ${srcLoc.code}` });
-  logAudit('CREATE', 'Transfer Antar Lokasi', `${docNumber}: ${fmtNum(qty)} ${safeSku(tlSelectedSkuId).sku} dari ${srcLoc.code} ke ${destLoc.code}`);
+  const outEntry = await postMovement({ tipe:'TRANSFER_OUT', sku_id: tlSelectedSkuId, location_id: tlSelectedAsalId, qty:-qty, ref_type:'Transfer Antar Lokasi', ref_doc: docNumber, catatan: catatan || `Transfer ke ${destLoc.code}` });
+  await postMovement({ tipe:'TRANSFER_IN', sku_id: tlSelectedSkuId, location_id: tlSelectedTujuanId, qty, ref_type:'Transfer Antar Lokasi', ref_doc: docNumber, related_movement_id: outEntry.id, catatan: catatan || `Transfer dari ${srcLoc.code}` });
+  await logAudit('CREATE', 'Transfer Antar Lokasi', `${docNumber}: ${fmtNum(qty)} ${safeSku(tlSelectedSkuId).sku} dari ${srcLoc.code} ke ${destLoc.code}`);
   saveState();
   toast(`Tersimpan — ${docNumber}`);
 
