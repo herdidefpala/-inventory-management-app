@@ -258,18 +258,23 @@ async function loadMasterDataFromSupabase(){
   // schema dump). Fetch each so every device sees the same rows instead of
   // the local SEED_* fallback in data.js. On error, keep whatever state.X
   // already had (seed/localStorage) rather than blanking that section out.
-  const [wh, sk, loc, sup, cus] = await Promise.all([
+  const [wh, sk, loc, sup, cus, stf] = await Promise.all([
     supabaseClient.from('warehouses').select('*'),
     supabaseClient.from('skus').select('*'),
     supabaseClient.from('locations').select('*'),
     supabaseClient.from('suppliers').select('*'),
     supabaseClient.from('customers').select('*'),
+    supabaseClient.from('staff').select('*'),
   ]);
   if (wh.error) console.error('Gagal memuat warehouses dari Supabase', wh.error); else state.warehouses = wh.data;
   if (sk.error) console.error('Gagal memuat skus dari Supabase', sk.error); else state.skus = sk.data;
   if (loc.error) console.error('Gagal memuat locations dari Supabase', loc.error); else state.locations = loc.data;
   if (sup.error) console.error('Gagal memuat suppliers dari Supabase', sup.error); else state.suppliers = sup.data;
   if (cus.error) console.error('Gagal memuat customers dari Supabase', cus.error); else state.customers = cus.data;
+  // Staff (Sub-Fase 3, langkah 1/3 — baca saja): timpa dengan daftar lengkap
+  // dari Supabase. Ini berjalan SETELAH bridge single-row di loadStaffForUser,
+  // jadi baris user yang baru login pasti ikut ada di sini juga.
+  if (stf.error) console.error('Gagal memuat staff dari Supabase', stf.error); else state.staff = stf.data;
 }
 
 async function loadTransactionsFromSupabase(){
