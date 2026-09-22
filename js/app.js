@@ -272,6 +272,37 @@ async function loadMasterDataFromSupabase(){
   if (cus.error) console.error('Gagal memuat customers dari Supabase', cus.error); else state.customers = cus.data;
 }
 
+async function loadTransactionsFromSupabase(){
+  // SUPABASE: bagian yang kemarin terlewat — semua form transaksi sudah
+  // menulis ke Supabase, tapi state.X tidak pernah dibaca ulang dari sana
+  // saat login, jadi tiap device cuma melihat riwayat lokalnya sendiri.
+  // Fetch semuanya di sini, urutkan terbaru-dulu (sama seperti pola
+  // .unshift() yang dipakai saat menambah item baru secara lokal).
+  const [mv, so, bm, bk, tg, tl, logs] = await Promise.all([
+    supabaseClient.from('stock_movements').select('*'),
+    supabaseClient.from('so_items').select('*'),
+    supabaseClient.from('barang_masuk_items').select('*'),
+    supabaseClient.from('barang_keluar_items').select('*'),
+    supabaseClient.from('transfer_gudang_items').select('*'),
+    supabaseClient.from('transfer_lokasi_items').select('*'),
+    supabaseClient.from('audit_logs').select('*'),
+  ]);
+  const byWaktuDesc = (a,b)=> (b.waktu||'').localeCompare(a.waktu||'');
+  if (mv.error) console.error('Gagal memuat stock_movements dari Supabase', mv.error); else state.stockMovements = mv.data;
+  if (so.error) console.error('Gagal memuat so_items dari Supabase', so.error);
+  else { state.soItems = so.data.sort(byWaktuDesc); state.soCounter = Math.max(state.soCounter, state.soItems.length); }
+  if (bm.error) console.error('Gagal memuat barang_masuk_items dari Supabase', bm.error);
+  else { state.barangMasukItems = bm.data.sort(byWaktuDesc); state.bmCounter = Math.max(state.bmCounter, state.barangMasukItems.length); }
+  if (bk.error) console.error('Gagal memuat barang_keluar_items dari Supabase', bk.error);
+  else { state.barangKeluarItems = bk.data.sort(byWaktuDesc); state.bkCounter = Math.max(state.bkCounter, state.barangKeluarItems.length); }
+  if (tg.error) console.error('Gagal memuat transfer_gudang_items dari Supabase', tg.error);
+  else { state.transferGudangItems = tg.data.sort(byWaktuDesc); state.tgCounter = Math.max(state.tgCounter, state.transferGudangItems.length); }
+  if (tl.error) console.error('Gagal memuat transfer_lokasi_items dari Supabase', tl.error);
+  else { state.transferLokasiItems = tl.data.sort(byWaktuDesc); state.tlCounter = Math.max(state.tlCounter, state.transferLokasiItems.length); }
+  if (logs.error) console.error('Gagal memuat audit_logs dari Supabase', logs.error);
+  else state.auditLogs = logs.data.sort((a,b)=> (b.created_at||'').localeCompare(a.created_at||''));
+}
+
 async function loadStaffForUser(authUser){
   let staffRow, error;
   try {
@@ -304,6 +335,7 @@ async function loadStaffForUser(authUser){
   // suppliers/customers yang asli dari Supabase, lalu bangun ulang semua
   // peta lookup (mWh, mSku, mLoc, dst) sekali saja setelah semuanya siap.
   await loadMasterDataFromSupabase();
+  await loadTransactionsFromSupabase();
   rebuildIndexes();
 
   document.getElementById('authScreen').classList.add('hidden');
