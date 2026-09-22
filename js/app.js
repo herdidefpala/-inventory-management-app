@@ -258,13 +258,15 @@ async function loadMasterDataFromSupabase(){
   // schema dump). Fetch each so every device sees the same rows instead of
   // the local SEED_* fallback in data.js. On error, keep whatever state.X
   // already had (seed/localStorage) rather than blanking that section out.
-  const [wh, sk, loc, sup, cus, stf] = await Promise.all([
+  const [wh, sk, loc, sup, cus, stf, set, perm] = await Promise.all([
     supabaseClient.from('warehouses').select('*'),
     supabaseClient.from('skus').select('*'),
     supabaseClient.from('locations').select('*'),
     supabaseClient.from('suppliers').select('*'),
     supabaseClient.from('customers').select('*'),
     supabaseClient.from('staff').select('*'),
+    supabaseClient.from('settings').select('*').eq('id', true).maybeSingle(),
+    supabaseClient.from('permissions').select('*'),
   ]);
   if (wh.error) console.error('Gagal memuat warehouses dari Supabase', wh.error); else state.warehouses = wh.data;
   if (sk.error) console.error('Gagal memuat skus dari Supabase', sk.error); else state.skus = sk.data;
@@ -275,6 +277,19 @@ async function loadMasterDataFromSupabase(){
   // dari Supabase. Ini berjalan SETELAH bridge single-row di loadStaffForUser,
   // jadi baris user yang baru login pasti ikut ada di sini juga.
   if (stf.error) console.error('Gagal memuat staff dari Supabase', stf.error); else state.staff = stf.data;
+  // Settings: di-merge (bukan ditimpa total) karena warehouse_name/warehouse_code
+  // di data lokal tidak punya kolom padanan di Supabase — biarkan tetap dari seed.
+  if (set.error) console.error('Gagal memuat settings dari Supabase', set.error);
+  else if (set.data) Object.assign(state.settings, set.data);
+  // Permissions: di-merge per (module, role) supaya kalau ada baris yang belum
+  // ke-seed di Supabase, modul itu tetap pakai default lokal, bukan hilang.
+  if (perm.error) console.error('Gagal memuat permissions dari Supabase', perm.error);
+  else if (perm.data){
+    perm.data.forEach(row=>{
+      if (!state.permissions[row.module]) state.permissions[row.module] = {};
+      state.permissions[row.module][row.role] = { view:row.can_view, create:row.can_create, update:row.can_update, delete:row.can_delete };
+    });
+  }
 }
 
 async function loadTransactionsFromSupabase(){
@@ -3400,25 +3415,31 @@ function goToMasterTab(tab){
 }
 
 function initSettings(){
-  document.getElementById('formCompany').addEventListener('submit', (e)=>{
+  document.getElementById('formCompany').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    Object.assign(state.settings, {
+    const payload = {
       company_name: document.getElementById('setCompanyName').value.trim(),
       app_name: document.getElementById('setAppName').value.trim(),
-    });
+    };
+    const { error } = await supabaseClient.from('settings').upsert({ id:true, ...payload });
+    if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return; }
+    Object.assign(state.settings, payload);
     logAudit('SETTING','Pengaturan','Memperbarui informasi perusahaan');
     saveState();
     applyBranding();
     toast('Pengaturan disimpan');
   });
 
-  document.getElementById('formPreferensi').addEventListener('submit', (e)=>{
+  document.getElementById('formPreferensi').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    Object.assign(state.settings, {
+    const payload = {
       default_warehouse_id: document.getElementById('setDefaultGudang').value,
       default_period_days: parseInt(document.getElementById('setDefaultPeriod').value,10),
       low_stock_threshold: Math.max(0, parseInt(document.getElementById('setLowStockThreshold').value,10) || 0),
-    });
+    };
+    const { error } = await supabaseClient.from('settings').upsert({ id:true, ...payload });
+    if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return; }
+    Object.assign(state.settings, payload);
     logAudit('SETTING','Pengaturan','Memperbarui preferensi sistem (gudang default, periode dashboard, ambang stok menipis)');
     saveState();
     toast('Preferensi disimpan');
@@ -3466,9 +3487,17 @@ function renderSettings(){
       </tr>`;
     }).join('')}</tbody>`;
   table.querySelectorAll('input[type=checkbox]:not([disabled])').forEach(cb=>{
-    cb.addEventListener('change', ()=>{
-      state.permissions[cb.dataset.mod][cb.dataset.role][cb.dataset.key] = cb.checked;
-      logAudit('SETTING','Pengaturan',`Ubah hak akses ${cb.dataset.role} pada ${cb.dataset.mod}.${cb.dataset.key} = ${cb.checked}`);
+    cb.addEventListener('change', async ()=>{
+      const mod = cb.dataset.mod, role = cb.dataset.role, key = cb.dataset.key, checked = cb.checked;
+      const colMap = { view:'can_view', create:'can_create', update:'can_update', delete:'can_delete' };
+      const { error } = await supabaseClient.from('permissions').update({ [colMap[key]]: checked }).eq('module', mod).eq('role', role);
+      if (error){
+        toast('Gagal menyimpan ke server: '+error.message, 'error');
+        cb.checked = !checked;
+        return;
+      }
+      state.permissions[mod][role][key] = checked;
+      logAudit('SETTING','Pengaturan',`Ubah hak akses ${role} pada ${mod}.${key} = ${checked}`);
       saveState();
     });
   });
