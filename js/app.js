@@ -2858,10 +2858,11 @@ function renderCustomerTable(){
 }
 
 const MASTER_KIND_CONFIG = {
-  // `table` = nama tabel Supabase yang disinkronkan untuk edit/toggle/hapus
-  // baris yang SUDAH ADA. Staff kini ikut sync untuk operasi itu (Sub-Fase 3,
-  // langkah 2/3) — hanya MEMBUAT staff baru lewat tombol "Tambah Staff" yang
-  // masih local-only, karena itu butuh akun Supabase Auth sungguhan (langkah 3).
+  // `table` = nama tabel Supabase yang disinkronkan untuk create/edit/
+  // toggle/hapus. Staff (Sub-Fase 3) kini ikut penuh, dengan satu catatan:
+  // staff BARU disimpan tanpa auth_user_id (NULL, sama seperti data seed
+  // lama) — orangnya belum bisa login sampai daftar sendiri lewat Register
+  // (auto-tertaut via trigger) atau ditautkan manual di Supabase.
   sku:      { arr:()=>state.skus,       label:'barang',   module:'Master Barang',   render:renderBarangTable,   table:'skus' },
   lokasi:   { arr:()=>state.locations,  label:'lokasi',   module:'Master Lokasi',   render:renderLokasiTable,   table:'locations' },
   gudang:   { arr:()=>state.warehouses, label:'gudang',   module:'Master Gudang',   render:renderGudangTable,   table:'warehouses' },
@@ -3050,6 +3051,7 @@ function openStaffModal(id){
     const name = document.getElementById('mStaffName').value.trim();
     const email = document.getElementById('mStaffEmail').value.trim();
     if (!name || !email){ toast('Nama dan email wajib diisi','warning'); return; }
+    let successMsg = 'Data staff tersimpan';
     if (editing){
       const payload = { name, email, role:document.getElementById('mStaffRole').value, warehouse_id:document.getElementById('mStaffWh').value };
       const { error } = await supabaseClient.from('staff').update(payload).eq('id', editing.id);
@@ -3057,13 +3059,19 @@ function openStaffModal(id){
       Object.assign(editing, payload);
       logAudit('UPDATE','Master Staff',`Mengubah data ${name}`);
     } else {
-      // Belum disambungkan ke Supabase (langkah 3) — staff baru butuh akun
-      // Auth sungguhan, bukan cuma baris data. Tetap local-only untuk saat ini.
-      state.staff.push({ id:'staff-'+Date.now(), name, email, role:document.getElementById('mStaffRole').value, warehouse_id:document.getElementById('mStaffWh').value, is_active:true });
+      // Sub-Fase 3, langkah 3/3: baris data disinkronkan ke Supabase, tapi
+      // auth_user_id sengaja dikosongkan (NULL) — sama seperti staff seed
+      // lama. Orangnya belum bisa login sampai daftar sendiri lewat halaman
+      // Register (auto-tertaut lewat trigger) atau ditautkan manual di Supabase.
+      const row = { id:'staff-'+Date.now(), name, email, role:document.getElementById('mStaffRole').value, warehouse_id:document.getElementById('mStaffWh').value, is_active:true };
+      const { error } = await supabaseClient.from('staff').insert(row);
+      if (error){ toast('Gagal menyimpan ke server: '+error.message, 'error'); return false; }
+      state.staff.push(row);
       logAudit('CREATE','Master Staff',`Menambahkan staff baru ${name}`);
+      successMsg = 'Staff tersimpan — belum bisa login sampai daftar sendiri atau ditautkan ke akun';
     }
     rebuildIndexes(); saveState(); renderStaffTable(); populateSharedFilters();
-    toast('Data staff tersimpan');
+    toast(successMsg);
   });
 }
 
