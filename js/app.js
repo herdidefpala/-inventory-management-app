@@ -89,7 +89,7 @@ function saveState(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function logAudit(action, module, detail){
+async function logAudit(action, module, detail){
   const entry = {
     id: 'log-' + Date.now(),
     user_name: ui.currentUser ? ui.currentUser.name : 'System',
@@ -97,7 +97,14 @@ function logAudit(action, module, detail){
     created_at: new Date().toISOString().slice(0,19)
   };
   state.auditLogs.unshift(entry);
-  // SUPABASE: insert into audit_logs (append-only, RLS: admin can select, no delete policy)
+  // Fire-and-forget: audit trail is secondary to the actual data, so a sync
+  // failure here is logged quietly rather than interrupting the workflow.
+  try {
+    const { error } = await supabaseClient.from('audit_logs').insert(entry);
+    if (error) console.error('Gagal sinkron audit_logs ke Supabase', error, entry);
+  } catch(e){
+    console.error('Gagal sinkron audit_logs ke Supabase', e, entry);
+  }
 }
 
 /* ---------------------------------- Utilities ---------------------------------- */
@@ -165,7 +172,7 @@ function getQtySystem(skuId, locId){
   return state.stockMovements.reduce((sum,m)=> (m.sku_id===skuId && m.location_id===locId) ? sum + m.qty : sum, 0);
 }
 
-function postMovement({ tipe, sku_id, location_id, qty, ref_type, ref_doc, supplier_id=null, customer_id=null, related_movement_id=null, catatan='' }){
+async function postMovement({ tipe, sku_id, location_id, qty, ref_type, ref_doc, supplier_id=null, customer_id=null, related_movement_id=null, catatan='' }){
   const loc = mLoc[location_id];
   const entry = {
     id: 'mv-' + Date.now() + Math.random().toString(36).slice(2,6),
@@ -176,8 +183,21 @@ function postMovement({ tipe, sku_id, location_id, qty, ref_type, ref_doc, suppl
     qty, ref_type, ref_doc, supplier_id, customer_id, related_movement_id, catatan,
     created_by: ui.currentUser ? ui.currentUser.name : 'System',
   };
-  // SUPABASE: insert into stock_movements (append-only ledger; qty_system is a VIEW that SUMs this table)
+  // Push locally first (synchronous, before any await) so every existing
+  // caller — including the ones not yet awaiting this function — keeps its
+  // current instant behavior. The Supabase write is attempted right after;
+  // on failure we warn instead of silently losing the mismatch.
   state.stockMovements.push(entry);
+  try {
+    const { error } = await supabaseClient.from('stock_movements').insert(entry);
+    if (error){
+      console.error('Gagal sinkron stock_movements ke Supabase', error, entry);
+      toast('Perubahan stok tersimpan lokal tapi GAGAL sinkron ke server — cek koneksi.', 'error');
+    }
+  } catch(e){
+    console.error('Gagal sinkron stock_movements ke Supabase', e, entry);
+    toast('Perubahan stok tersimpan lokal tapi GAGAL sinkron ke server — cek koneksi.', 'error');
+  }
   return entry;
 }
 
@@ -1028,17 +1048,18 @@ function openQuickSOModal(skuId, locationId){
     </div>
     <label class="field"><span class="field-label">Catatan <span class="req hidden" id="qsoCatatanReq">*</span></span><textarea id="qsoCatatan" rows="2" placeholder="Wajib diisi jika terjadi selisih…"></textarea></label>
     <p class="text-muted-sm">Langsung final begitu disimpan — tidak ada langkah approval terpisah, tapi tercatat penuh di Audit Log.</p>
-  `, ()=>{
+  `, async ()=>{
     const qtyFisikRaw = document.getElementById('qsoQtyFisik').value;
     if (qtyFisikRaw === '' || parseFloat(qtyFisikRaw) < 0){ toast('Qty Fisik wajib diisi (≥ 0)', 'warning'); return; }
     const qtyFisik = parseFloat(qtyFisikRaw);
     const selisih = qtyFisik - qtySystem;
     const catatan = document.getElementById('qsoCatatan').value.trim();
     if (selisih !== 0 && !catatan){ toast('Catatan wajib diisi karena terjadi selisih', 'warning'); return; }
-    const item = finalizeSO({
+    const item = await finalizeSO({
       skuId, locationId, operatorId: ui.currentUser.id, tanggal: todayStr(),
       qtySystem, qtyFisik, catatan, sourceLabel: 'SO Cepat'
     });
+    if (!item) return false;
     toast(`SO Cepat tersimpan — ${item.so_number}`);
     renderStockGudang();
   });
@@ -1145,9 +1166,9 @@ function initInputSO(){
   document.querySelectorAll('#formSO button[type=submit]').forEach(btn=>{
     btn.addEventListener('click', ()=> submitMode = btn.dataset.mode);
   });
-  document.getElementById('formSO').addEventListener('submit', (e)=>{
+  document.getElementById('formSO').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    submitSO(submitMode);
+    await submitSO(submitMode);
   });
 }
 
@@ -1273,12 +1294,11 @@ function updateSelisih(){
 
 /* Shared by the full Input SO form and the "SO Cepat" quick-action modal —
    one place owns "what happens when a physical count is finalized". */
-function finalizeSO({ skuId, locationId, operatorId, tanggal, qtySystem, qtyFisik, catatan, sourceLabel='Input SO' }){
+async function finalizeSO({ skuId, locationId, operatorId, tanggal, qtySystem, qtyFisik, catatan, sourceLabel='Input SO' }){
   const loc = mLoc[locationId];
   const selisih = qtyFisik - qtySystem;
   const status = selisih===0 ? 'Sesuai' : (selisih>0 ? 'Selisih Plus' : 'Selisih Minus');
-  state.soCounter += 1;
-  const soNumber = `SO-${tanggal.replace(/-/g,'')}-${String(state.soCounter).padStart(3,'0')}`;
+  const soNumber = `SO-${tanggal.replace(/-/g,'')}-${String(state.soCounter+1).padStart(3,'0')}`;
 
   const item = {
     id: 'soi-' + Date.now() + Math.random().toString(36).slice(2,5),
@@ -1288,23 +1308,29 @@ function finalizeSO({ skuId, locationId, operatorId, tanggal, qtySystem, qtyFisi
     is_final: true, recount_of_id: null,
     waktu: new Date().toISOString().slice(0,19)
   };
-  // SUPABASE: insert into stock_opname_items (snapshot qty_system at time of count, per PRD §8/§21)
+  const { error } = await supabaseClient.from('so_items').insert(item);
+  if (error){
+    console.error('Gagal menyimpan so_items ke Supabase', error, item);
+    toast('Gagal menyimpan ke server: '+error.message, 'error');
+    return null;
+  }
+  state.soCounter += 1;
   state.soItems.unshift(item);
   if (selisih !== 0){
     // Auto-approved, no separate admin sign-off (per confirmed design) — the physical
     // count immediately becomes the new system truth, posted as one ledger entry.
-    postMovement({
+    await postMovement({
       tipe: 'SO_ADJUSTMENT', sku_id: skuId, location_id: locationId,
       qty: selisih, ref_type: sourceLabel, ref_doc: soNumber,
       catatan: `Koreksi SO: sistem ${fmtNum(qtySystem)} → fisik ${fmtNum(qtyFisik)}. ${catatan}`.trim()
     });
   }
-  logAudit('SO', 'Stock Opname', `${soNumber} (${sourceLabel}): ${safeSku(skuId).sku} @ ${loc.code} — ${status}`);
+  await logAudit('SO', 'Stock Opname', `${soNumber} (${sourceLabel}): ${safeSku(skuId).sku} @ ${loc.code} — ${status}`);
   saveState();
   return item;
 }
 
-function submitSO(mode){
+async function submitSO(mode){
   if (!ui.selectedLocationId || !ui.selectedSkuId){
     toast('Pilih lokasi dan SKU terlebih dahulu', 'warning'); return;
   }
@@ -1322,11 +1348,12 @@ function submitSO(mode){
   }
 
   const tanggal = document.getElementById('soTanggal').value || todayStr();
-  const item = finalizeSO({
+  const item = await finalizeSO({
     skuId: ui.selectedSkuId, locationId: ui.selectedLocationId,
     operatorId: document.getElementById('soOperator').value,
     tanggal, qtySystem, qtyFisik, catatan, sourceLabel: 'Input SO'
   });
+  if (!item) return;
   toast(`Tersimpan — ${item.so_number}`);
 
   document.getElementById('soQtyFisik').value = '';
