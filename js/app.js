@@ -21,6 +21,7 @@ let ui = {
   lokasiPage: 1,
   importTarget: null, // 'barang' | 'lokasi'
   importStep: 1,
+  importParsed: null, // { rows:[...], errors:[...] } — hasil parsing file asli (hanya untuk target 'barang' sejauh ini)
 };
 
 /* ---------------------------------- Bootstrap / persistence ---------------------------------- */
@@ -3195,8 +3196,48 @@ function openCustomerModal(id){
 
 /* ---- Import wizard ---- */
 function openImportModal(target){
-  ui.importTarget = target; ui.importStep = 1; ui.lastImportResult = null;
+  if (target !== 'barang'){
+    Swal.fire({ icon:'info', title:'Belum tersedia', text:'Fitur Import Massal untuk bagian ini sedang diperbaiki (sebelumnya selalu memasukkan data contoh, bukan isi file Anda) — sementara gunakan form input manual dulu.' });
+    return;
+  }
+  ui.importTarget = target; ui.importStep = 1; ui.lastImportResult = null; ui.importParsed = null;
   renderImportModal();
+}
+
+function parseImportCsvFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try {
+        let text = String(reader.result || '');
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // buang BOM dari template
+        const lines = text.split(/\r\n|\n|\r/).filter(l=>l.trim()!=='');
+        lines.shift(); // baris 1 = header, urutan kolom sudah tetap sesuai template
+        resolve(lines.map(line=> line.split(';').map(c=>c.trim())));
+      } catch(e){ reject(e); }
+    };
+    reader.onerror = ()=> reject(reader.error || new Error('Gagal membaca file'));
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+function buildBarangImportRows(rawRows){
+  const seen = new Set();
+  const rows = [], errors = [];
+  rawRows.forEach((cols, i)=>{
+    const lineNo = i + 2; // +1 header, +1 penomoran mulai dari 1
+    const [sku, sku_induk, nama_produk, varian, kategori, unit] = cols;
+    if (!sku || !nama_produk){ errors.push(`Baris ${lineNo}: SKU dan Nama Produk wajib diisi`); return; }
+    if (seen.has(sku)){ errors.push(`Baris ${lineNo}: SKU "${sku}" duplikat di dalam file ini`); return; }
+    if (state.skus.some(s=>s.sku===sku)){ errors.push(`Baris ${lineNo}: SKU "${sku}" sudah ada di database`); return; }
+    seen.add(sku);
+    rows.push({
+      id: 'sku-'+Date.now()+Math.random().toString(36).slice(2,6)+i,
+      sku, sku_induk: sku_induk||'', nama_produk, varian: varian||'', kategori: kategori||'', unit: unit||'Pcs',
+      foto_url:'', is_active:true
+    });
+  });
+  return { rows, errors };
 }
 
 const IMPORT_TARGET_LABELS = { barang:'Master Barang', lokasi:'Master Lokasi', 'barang-masuk':'Barang Masuk (Massal)', 'barang-keluar':'Barang Keluar (Massal)' };
@@ -3211,18 +3252,24 @@ function renderImportModal(){
   if (ui.importStep === 1){
     body = `
       <div class="import-steps">${stepsHtml}</div>
-      <p class="text-muted-sm" style="margin-bottom:14px;">Unduh template, isi sesuai kolom, lalu unggah kembali. Sistem akan memvalidasi format, field wajib, duplikasi, dan referensi sebelum data masuk.</p>
-      <button type="button" class="btn btn-outline btn-block" id="btnDownloadTemplate" style="margin-bottom:14px;"><span class="material-symbols-outlined">download</span> Unduh Template XLSX</button>
+      <p class="text-muted-sm" style="margin-bottom:14px;">Unduh template, isi sesuai kolom, lalu unggah kembali. Sistem akan memvalidasi format, field wajib, dan duplikasi sebelum data masuk.</p>
+      <button type="button" class="btn btn-outline btn-block" id="btnDownloadTemplate" style="margin-bottom:14px;"><span class="material-symbols-outlined">download</span> Unduh Template CSV</button>
       <div class="dropzone">
         <span class="material-symbols-outlined">upload_file</span>
-        <p style="margin-bottom:10px;">Tarik file ke sini atau klik untuk memilih</p>
-        <input type="file" id="importFileInput" accept=".xlsx,.csv" style="max-width:240px;margin:0 auto;">
-      </div>`;
+        <p style="margin-bottom:10px;">Tarik file ke sini atau klik untuk memilih (format .csv sesuai template)</p>
+        <input type="file" id="importFileInput" accept=".csv" style="max-width:240px;margin:0 auto;">
+      </div>
+      <div id="importFileStatus" class="text-muted-sm" style="margin-top:10px;"></div>`;
   } else if (ui.importStep === 2){
-    let headRow, bodyRows;
+    let headRow, bodyRows, rowCount, errorSummary = '';
     if (target==='barang'){
+      const parsed = ui.importParsed || { rows: [], errors: [] };
       headRow = '<th>SKU</th><th>Nama Produk</th><th>Kategori</th>';
-      bodyRows = pool.map(p=>`<tr><td class="cell-strong">${p.sku}</td><td>${p.nama_produk}</td><td>${p.kategori}</td></tr>`).join('');
+      bodyRows = parsed.rows.map(p=>`<tr><td class="cell-strong">${p.sku}</td><td>${p.nama_produk}</td><td>${p.kategori}</td></tr>`).join('');
+      rowCount = parsed.rows.length;
+      if (parsed.errors.length){
+        errorSummary = `<div class="alert alert-warning" style="margin-bottom:10px;"><strong>${parsed.errors.length} baris dilewati:</strong><br>${parsed.errors.slice(0,8).join('<br>')}${parsed.errors.length>8?`<br>...dan ${parsed.errors.length-8} lainnya`:''}</div>`;
+      }
     } else if (target==='lokasi'){
       headRow = '<th>Kode</th><th>Nama</th><th>Gudang</th><th>Jenis</th>';
       bodyRows = pool.map(p=>`<tr><td class="cell-strong">${p.code}</td><td>${p.name}</td><td>${p.warehouse_name}</td><td>${p.location_type}</td></tr>`).join('');
@@ -3254,12 +3301,14 @@ function renderImportModal(){
     }
     body = `
       <div class="import-steps">${stepsHtml}</div>
-      <p class="text-muted-sm" style="margin-bottom:10px;">Pratinjau ${pool.length} baris dari file yang diunggah:</p>
+      ${errorSummary}
+      <p class="text-muted-sm" style="margin-bottom:10px;">Pratinjau ${target==='barang' ? rowCount : pool.length} baris dari file yang diunggah:</p>
       <div class="table-scroll" style="max-height:280px;">
         <table class="data-table"><thead><tr>${headRow}</tr></thead><tbody>${bodyRows}</tbody></table>
       </div>`;
   } else {
-    const result = ui.lastImportResult || { ok: pool.length, rejected: 0 };
+    const fallbackCount = target==='barang' ? (ui.importParsed ? ui.importParsed.rows.length : 0) : pool.length;
+    const result = ui.lastImportResult || { ok: fallbackCount, rejected: 0 };
     body = `
       <div class="import-steps">${stepsHtml}</div>
       <div style="text-align:center;padding:20px 10px;">
@@ -3291,19 +3340,50 @@ function renderImportModal(){
       const fname = target==='barang' ? 'Master_Barang' : target==='lokasi' ? 'Master_Lokasi' : target==='barang-masuk' ? 'Barang_Masuk_Massal' : 'Barang_Keluar_Massal';
       downloadBlob('\uFEFF'+headers+'\n', `Template_${fname}.csv`, 'text/csv;charset=utf-8;');
     });
-    document.getElementById('importFileInput').addEventListener('change', (e)=>{
-      document.getElementById('impNext').disabled = !e.target.files.length;
+    document.getElementById('importFileInput').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      const statusEl = document.getElementById('importFileStatus');
+      document.getElementById('impNext').disabled = true;
+      ui.importParsed = null;
+      if (!file) { statusEl.textContent = ''; return; }
+      statusEl.textContent = 'Membaca file...';
+      try {
+        const rawRows = await parseImportCsvFile(file);
+        if (target==='barang'){
+          ui.importParsed = buildBarangImportRows(rawRows);
+        }
+        if (!ui.importParsed.rows.length){
+          statusEl.innerHTML = `<span style="color:var(--danger,#DC2626);">Tidak ada baris valid yang bisa diimport (${ui.importParsed.errors.length} baris bermasalah). Perbaiki file lalu unggah ulang.</span>`;
+          return;
+        }
+        statusEl.innerHTML = `${ui.importParsed.rows.length} baris siap diimport${ui.importParsed.errors.length ? `, ${ui.importParsed.errors.length} baris akan dilewati (lihat rincian di pratinjau)` : ''}.`;
+        document.getElementById('impNext').disabled = false;
+      } catch(err){
+        console.error('Gagal membaca file import', err);
+        statusEl.innerHTML = `<span style="color:var(--danger,#DC2626);">Gagal membaca file — pastikan formatnya .csv sesuai template.</span>`;
+      }
     });
     document.getElementById('impCancel').addEventListener('click', ()=> document.getElementById('modalRoot').innerHTML='');
     document.getElementById('impNext').addEventListener('click', ()=>{ ui.importStep = 2; renderImportModal(); });
   } else if (ui.importStep === 2){
     footer.innerHTML = `<button type="button" class="btn btn-outline" id="impBack">Kembali</button><button type="button" class="btn btn-primary" id="impConfirm">Konfirmasi Import</button>`;
     document.getElementById('impBack').addEventListener('click', ()=>{ ui.importStep=1; renderImportModal(); });
-    document.getElementById('impConfirm').addEventListener('click', ()=>{
+    document.getElementById('impConfirm').addEventListener('click', async ()=>{
+      const confirmBtn = document.getElementById('impConfirm');
+      confirmBtn.disabled = true;
       if (target==='barang'){
-        pool.forEach(p=> state.skus.push({ id:'sku-'+Date.now()+Math.random().toString(36).slice(2,6), sku:p.sku, sku_induk:p.sku_induk, nama_produk:p.nama_produk, varian:'', kategori:p.kategori, unit:p.unit, foto_url:'', is_active:true }));
-        logAudit('IMPORT', 'Master Barang', `Import ${pool.length} baris data barang`);
+        const rows = ui.importParsed.rows;
+        const { error } = await supabaseClient.from('skus').insert(rows);
+        if (error){
+          console.error('Gagal import massal ke Supabase (skus)', error, rows);
+          toast('Gagal menyimpan ke server: '+error.message, 'error');
+          confirmBtn.disabled = false;
+          return;
+        }
+        rows.forEach(r=> state.skus.push(r));
+        logAudit('IMPORT', 'Master Barang', `Import ${rows.length} baris data barang dari file`);
         rebuildIndexes(); saveState(); renderBarangTable(); populateSharedFilters();
+        ui.lastImportResult = { ok: rows.length, rejected: ui.importParsed.errors.length };
       } else if (target==='lokasi'){
         pool.forEach(p=>{
           const wh = state.warehouses.find(w=>w.name===p.warehouse_name) || state.warehouses[0];
