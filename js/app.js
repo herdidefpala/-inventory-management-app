@@ -3196,10 +3196,6 @@ function openCustomerModal(id){
 
 /* ---- Import wizard ---- */
 function openImportModal(target){
-  if (target !== 'barang'){
-    Swal.fire({ icon:'info', title:'Belum tersedia', text:'Fitur Import Massal untuk bagian ini sedang diperbaiki (sebelumnya selalu memasukkan data contoh, bukan isi file Anda) — sementara gunakan form input manual dulu.' });
-    return;
-  }
   ui.importTarget = target; ui.importStep = 1; ui.lastImportResult = null; ui.importParsed = null;
   renderImportModal();
 }
@@ -3240,11 +3236,70 @@ function buildBarangImportRows(rawRows){
   return { rows, errors };
 }
 
+function buildLokasiImportRows(rawRows){
+  const seen = new Set();
+  const rows = [], errors = [];
+  rawRows.forEach((cols, i)=>{
+    const lineNo = i + 2;
+    const [code, name, gudangName, location_type] = cols;
+    if (!code){ errors.push(`Baris ${lineNo}: Kode Lokasi wajib diisi`); return; }
+    if (seen.has(code)){ errors.push(`Baris ${lineNo}: Kode "${code}" duplikat di dalam file ini`); return; }
+    if (state.locations.some(l=>l.code===code)){ errors.push(`Baris ${lineNo}: Kode "${code}" sudah ada di database`); return; }
+    const wh = state.warehouses.find(w=> w.name === gudangName);
+    if (!wh){ errors.push(`Baris ${lineNo}: Gudang "${gudangName||'(kosong)'}" tidak ditemukan — cocokkan persis nama gudang yang sudah terdaftar`); return; }
+    seen.add(code);
+    rows.push({
+      id: 'loc-'+Date.now()+Math.random().toString(36).slice(2,6)+i,
+      code, name: name||code, warehouse_id: wh.id, location_type: location_type||'Picking', is_active:true
+    });
+  });
+  return { rows, errors };
+}
+
+function buildBarangMasukImportRows(rawRows){
+  const rows = [], errors = [];
+  rawRows.forEach((cols, i)=>{
+    const lineNo = i + 2;
+    const [skuCode, locCode, qtyRaw, supplierName, noRef, catatan] = cols;
+    if (!skuCode || !locCode || !qtyRaw || !supplierName){ errors.push(`Baris ${lineNo}: SKU, Kode Lokasi, Qty Masuk, dan Supplier wajib diisi`); return; }
+    const qty = parseFloat(qtyRaw);
+    if (isNaN(qty) || qty <= 0){ errors.push(`Baris ${lineNo}: Qty Masuk harus angka > 0`); return; }
+    const sku = state.skus.find(s=>s.sku===skuCode);
+    if (!sku){ errors.push(`Baris ${lineNo}: SKU "${skuCode}" tidak ditemukan di Master Barang`); return; }
+    const loc = state.locations.find(l=>l.code===locCode);
+    if (!loc){ errors.push(`Baris ${lineNo}: Kode Lokasi "${locCode}" tidak ditemukan di Master Lokasi`); return; }
+    const supplier = state.suppliers.find(s=>s.name===supplierName);
+    if (!supplier){ errors.push(`Baris ${lineNo}: Supplier "${supplierName}" tidak ditemukan di Master Supplier`); return; }
+    rows.push({ sku_id: sku.id, sku_code: sku.sku, nama_produk: sku.nama_produk, location_id: loc.id, location_code: loc.code, warehouse_id: loc.warehouse_id, supplier_id: supplier.id, qty, no_referensi: noRef||'', catatan: catatan||'' });
+  });
+  return { rows, errors };
+}
+
+function buildBarangKeluarImportRows(rawRows){
+  const rows = [], errors = [];
+  rawRows.forEach((cols, i)=>{
+    const lineNo = i + 2;
+    const [skuCode, locCode, qtyRaw, customerName, noRef, catatan] = cols;
+    if (!skuCode || !locCode || !qtyRaw || !customerName){ errors.push(`Baris ${lineNo}: SKU, Kode Lokasi, Qty Keluar, dan Customer wajib diisi`); return; }
+    const qty = parseFloat(qtyRaw);
+    if (isNaN(qty) || qty <= 0){ errors.push(`Baris ${lineNo}: Qty Keluar harus angka > 0`); return; }
+    const sku = state.skus.find(s=>s.sku===skuCode);
+    if (!sku){ errors.push(`Baris ${lineNo}: SKU "${skuCode}" tidak ditemukan di Master Barang`); return; }
+    const loc = state.locations.find(l=>l.code===locCode);
+    if (!loc){ errors.push(`Baris ${lineNo}: Kode Lokasi "${locCode}" tidak ditemukan di Master Lokasi`); return; }
+    const customer = state.customers.find(c=>c.name===customerName);
+    if (!customer){ errors.push(`Baris ${lineNo}: Customer "${customerName}" tidak ditemukan di Master Customer`); return; }
+    rows.push({ sku_id: sku.id, sku_code: sku.sku, nama_produk: sku.nama_produk, location_id: loc.id, location_code: loc.code, warehouse_id: loc.warehouse_id, customer_id: customer.id, qty, no_referensi: noRef||'', catatan: catatan||'' });
+  });
+  return { rows, errors };
+}
+
 const IMPORT_TARGET_LABELS = { barang:'Master Barang', lokasi:'Master Lokasi', 'barang-masuk':'Barang Masuk (Massal)', 'barang-keluar':'Barang Keluar (Massal)' };
 
 function renderImportModal(){
   const target = ui.importTarget;
-  const pool = target==='barang' ? IMPORT_POOL_SKU : target==='lokasi' ? IMPORT_POOL_LOCATION : target==='barang-masuk' ? IMPORT_POOL_BARANG_MASUK : IMPORT_POOL_BARANG_KELUAR;
+  // Semua 4 target sekarang memakai ui.importParsed (hasil baca file asli) —
+  // tidak ada lagi yang bergantung pada data contoh IMPORT_POOL_* di data.js.
   const stepLabels = ['1. Unggah File','2. Pratinjau','3. Selesai'];
   const stepsHtml = stepLabels.map((l,i)=>`<div class="import-step ${ui.importStep===i+1?'active':ui.importStep>i+1?'done':''}">${l}</div>`).join('');
 
@@ -3271,43 +3326,50 @@ function renderImportModal(){
         errorSummary = `<div class="alert alert-warning" style="margin-bottom:10px;"><strong>${parsed.errors.length} baris dilewati:</strong><br>${parsed.errors.slice(0,8).join('<br>')}${parsed.errors.length>8?`<br>...dan ${parsed.errors.length-8} lainnya`:''}</div>`;
       }
     } else if (target==='lokasi'){
+      const parsed = ui.importParsed || { rows: [], errors: [] };
       headRow = '<th>Kode</th><th>Nama</th><th>Gudang</th><th>Jenis</th>';
-      bodyRows = pool.map(p=>`<tr><td class="cell-strong">${p.code}</td><td>${p.name}</td><td>${p.warehouse_name}</td><td>${p.location_type}</td></tr>`).join('');
+      bodyRows = parsed.rows.map(p=>`<tr><td class="cell-strong">${p.code}</td><td>${p.name}</td><td>${safeWh(p.warehouse_id).name}</td><td>${p.location_type}</td></tr>`).join('');
+      rowCount = parsed.rows.length;
+      if (parsed.errors.length){
+        errorSummary = `<div class="alert alert-warning" style="margin-bottom:10px;"><strong>${parsed.errors.length} baris dilewati:</strong><br>${parsed.errors.slice(0,8).join('<br>')}${parsed.errors.length>8?`<br>...dan ${parsed.errors.length-8} lainnya`:''}</div>`;
+      }
     } else if (target==='barang-masuk'){
-      headRow = '<th>SKU</th><th>Nama Produk</th><th>Lokasi</th><th>Qty Masuk</th><th>Keterangan</th>';
-      bodyRows = pool.map(p=>{
-        const sku = p.sku_id ? safeSku(p.sku_id) : { sku:p.sku_code, nama_produk:p.nama_produk };
-        const locLabel = p.location_id ? safeLoc(p.location_id).code : p.location_code;
-        const tag = p.scenario==='update'
-          ? '<span class="combo-tag combo-tag-ok">Update stok existing</span>'
-          : '<span class="badge badge-info">SKU/Lokasi baru</span>';
-        return `<tr><td class="cell-strong">${sku.sku}</td><td>${sku.nama_produk}</td><td>${locLabel}</td><td>${fmtNum(p.qty)}</td><td>${tag}</td></tr>`;
-      }).join('');
+      const parsed = ui.importParsed || { rows: [], errors: [] };
+      headRow = '<th>SKU</th><th>Nama Produk</th><th>Lokasi</th><th>Qty Masuk</th><th>Supplier</th>';
+      bodyRows = parsed.rows.map(p=>`<tr><td class="cell-strong">${p.sku_code}</td><td>${p.nama_produk}</td><td>${p.location_code}</td><td>${fmtNum(p.qty)}</td><td>${safeSupplier(p.supplier_id).name}</td></tr>`).join('');
+      rowCount = parsed.rows.length;
+      if (parsed.errors.length){
+        errorSummary = `<div class="alert alert-warning" style="margin-bottom:10px;"><strong>${parsed.errors.length} baris dilewati:</strong><br>${parsed.errors.slice(0,8).join('<br>')}${parsed.errors.length>8?`<br>...dan ${parsed.errors.length-8} lainnya`:''}</div>`;
+      }
     } else {
       // barang-keluar: simulate a running balance across the batch itself, since
       // two rows in the same file could target the same SKU+Lokasi in sequence.
+      const parsed = ui.importParsed || { rows: [], errors: [] };
       headRow = '<th>SKU</th><th>Nama Produk</th><th>Lokasi</th><th>Qty Keluar</th><th>Stok Tersedia</th><th>Status</th>';
       const running = {};
-      bodyRows = pool.map(p=>{
-        const sku = safeSku(p.sku_id), loc = safeLoc(p.location_id);
+      bodyRows = parsed.rows.map(p=>{
         const key = p.sku_id+'::'+p.location_id;
         if (!(key in running)) running[key] = getQtySystem(p.sku_id, p.location_id);
         const available = running[key];
         const ok = p.qty <= available;
         if (ok) running[key] -= p.qty;
         const status = ok ? '<span class="badge badge-success">OK</span>' : '<span class="badge badge-danger">Ditolak — stok tidak cukup</span>';
-        return `<tr><td class="cell-strong">${sku.sku}</td><td>${sku.nama_produk}</td><td>${loc.code}</td><td>${fmtNum(p.qty)}</td><td>${fmtNum(available)}</td><td>${status}</td></tr>`;
+        return `<tr><td class="cell-strong">${p.sku_code}</td><td>${p.nama_produk}</td><td>${p.location_code}</td><td>${fmtNum(p.qty)}</td><td>${fmtNum(available)}</td><td>${status}</td></tr>`;
       }).join('');
+      rowCount = parsed.rows.length;
+      if (parsed.errors.length){
+        errorSummary = `<div class="alert alert-warning" style="margin-bottom:10px;"><strong>${parsed.errors.length} baris dilewati:</strong><br>${parsed.errors.slice(0,8).join('<br>')}${parsed.errors.length>8?`<br>...dan ${parsed.errors.length-8} lainnya`:''}</div>`;
+      }
     }
     body = `
       <div class="import-steps">${stepsHtml}</div>
       ${errorSummary}
-      <p class="text-muted-sm" style="margin-bottom:10px;">Pratinjau ${target==='barang' ? rowCount : pool.length} baris dari file yang diunggah:</p>
+      <p class="text-muted-sm" style="margin-bottom:10px;">Pratinjau ${rowCount} baris dari file yang diunggah:</p>
       <div class="table-scroll" style="max-height:280px;">
         <table class="data-table"><thead><tr>${headRow}</tr></thead><tbody>${bodyRows}</tbody></table>
       </div>`;
   } else {
-    const fallbackCount = target==='barang' ? (ui.importParsed ? ui.importParsed.rows.length : 0) : pool.length;
+    const fallbackCount = ui.importParsed ? ui.importParsed.rows.length : 0;
     const result = ui.lastImportResult || { ok: fallbackCount, rejected: 0 };
     body = `
       <div class="import-steps">${stepsHtml}</div>
@@ -3335,8 +3397,8 @@ function renderImportModal(){
     document.getElementById('btnDownloadTemplate').addEventListener('click', ()=>{
       const headers = target==='barang' ? 'SKU;SKU Induk;Nama Produk;Varian;Kategori;Unit'
         : target==='lokasi' ? 'Kode Lokasi;Nama Lokasi;Gudang;Jenis Lokasi'
-        : target==='barang-masuk' ? 'SKU;Kode Lokasi;Qty Masuk;No Referensi;Catatan'
-        : 'SKU;Kode Lokasi;Qty Keluar;No Referensi;Catatan';
+        : target==='barang-masuk' ? 'SKU;Kode Lokasi;Qty Masuk;Supplier;No Referensi;Catatan'
+        : 'SKU;Kode Lokasi;Qty Keluar;Customer;No Referensi;Catatan';
       const fname = target==='barang' ? 'Master_Barang' : target==='lokasi' ? 'Master_Lokasi' : target==='barang-masuk' ? 'Barang_Masuk_Massal' : 'Barang_Keluar_Massal';
       downloadBlob('\uFEFF'+headers+'\n', `Template_${fname}.csv`, 'text/csv;charset=utf-8;');
     });
@@ -3351,6 +3413,12 @@ function renderImportModal(){
         const rawRows = await parseImportCsvFile(file);
         if (target==='barang'){
           ui.importParsed = buildBarangImportRows(rawRows);
+        } else if (target==='lokasi'){
+          ui.importParsed = buildLokasiImportRows(rawRows);
+        } else if (target==='barang-masuk'){
+          ui.importParsed = buildBarangMasukImportRows(rawRows);
+        } else {
+          ui.importParsed = buildBarangKeluarImportRows(rawRows);
         }
         if (!ui.importParsed.rows.length){
           statusEl.innerHTML = `<span style="color:var(--danger,#DC2626);">Tidak ada baris valid yang bisa diimport (${ui.importParsed.errors.length} baris bermasalah). Perbaiki file lalu unggah ulang.</span>`;
@@ -3385,53 +3453,89 @@ function renderImportModal(){
         rebuildIndexes(); saveState(); renderBarangTable(); populateSharedFilters();
         ui.lastImportResult = { ok: rows.length, rejected: ui.importParsed.errors.length };
       } else if (target==='lokasi'){
-        pool.forEach(p=>{
-          const wh = state.warehouses.find(w=>w.name===p.warehouse_name) || state.warehouses[0];
-          state.locations.push({ id:'loc-'+Date.now()+Math.random().toString(36).slice(2,6), code:p.code, name:p.name, warehouse_id:wh.id, location_type:p.location_type, is_active:true });
-        });
-        logAudit('IMPORT', 'Master Lokasi', `Import ${pool.length} baris data lokasi`);
+        const rows = ui.importParsed.rows;
+        const { error } = await supabaseClient.from('locations').insert(rows);
+        if (error){
+          console.error('Gagal import massal ke Supabase (locations)', error, rows);
+          toast('Gagal menyimpan ke server: '+error.message, 'error');
+          confirmBtn.disabled = false;
+          return;
+        }
+        rows.forEach(r=> state.locations.push(r));
+        logAudit('IMPORT', 'Master Lokasi', `Import ${rows.length} baris data lokasi dari file`);
         rebuildIndexes(); saveState(); renderLokasiTable(); populateSharedFilters();
+        ui.lastImportResult = { ok: rows.length, rejected: ui.importParsed.errors.length };
       } else if (target==='barang-masuk'){
-        // Barang Masuk massal: existing SKU+Lokasi pairs get a plain +qty movement
-        // (updates stock); pairs that don't exist yet get created in Master Data first.
-        const batchDoc = `BM-IMPORT-${todayStr().replace(/-/g,'')}-${Date.now().toString().slice(-4)}`;
-        let added = 0, updated = 0;
-        pool.forEach(p=>{
-          let skuId = p.sku_id, locId = p.location_id;
-          if (!skuId){
-            const newSku = { id:'sku-'+Date.now()+Math.random().toString(36).slice(2,6), sku:p.sku_code, sku_induk:'', nama_produk:p.nama_produk, varian:'', kategori:p.kategori, unit:p.unit||'Pcs', foto_url:'', is_active:true };
-            state.skus.push(newSku); skuId = newSku.id;
-          }
-          if (!locId){
-            const wh = state.warehouses.find(w=>w.name===p.warehouse_name) || state.warehouses[0];
-            const newLoc = { id:'loc-'+Date.now()+Math.random().toString(36).slice(2,6), code:p.location_code, name:p.location_name||p.location_code, warehouse_id:wh.id, location_type:p.location_type||'Simpan Stok', is_active:true };
-            state.locations.push(newLoc); locId = newLoc.id;
-          }
-          rebuildIndexes();
-          if (p.scenario==='update') updated++; else added++;
-          postMovement({ tipe:'IN', sku_id:skuId, location_id:locId, qty:p.qty, ref_type:'Barang Masuk (Import Massal)', ref_doc:batchDoc, catatan:'Import massal dari file' });
+        const rows = ui.importParsed.rows;
+        const tanggal = todayStr();
+        const batchDoc = `BM-IMPORT-${tanggal.replace(/-/g,'')}-${Date.now().toString().slice(-4)}`;
+        const itemsToInsert = rows.map((r,i)=>({
+          id: 'bmi-'+Date.now()+Math.random().toString(36).slice(2,5)+i,
+          doc_number: batchDoc, tanggal, waktu: new Date().toISOString().slice(0,19),
+          supplier_id: r.supplier_id, sku_id: r.sku_id, location_id: r.location_id, warehouse_id: r.warehouse_id,
+          qty: r.qty, no_referensi: r.no_referensi, catatan: r.catatan || 'Import massal dari file',
+          operator_id: ui.currentUser.id,
+        }));
+        const { error } = await supabaseClient.from('barang_masuk_items').insert(itemsToInsert);
+        if (error){
+          console.error('Gagal import massal ke Supabase (barang_masuk_items)', error, itemsToInsert);
+          toast('Gagal menyimpan ke server: '+error.message, 'error');
+          confirmBtn.disabled = false;
+          return;
+        }
+        state.bmCounter += itemsToInsert.length;
+        itemsToInsert.forEach(it=>{
+          state.barangMasukItems.unshift(it);
+          postMovement({ tipe:'IN', sku_id:it.sku_id, location_id:it.location_id, qty:it.qty, ref_type:'Barang Masuk (Import Massal)', ref_doc:batchDoc, supplier_id:it.supplier_id, catatan: it.catatan });
         });
-        logAudit('IMPORT', 'Barang Masuk', `Import massal ${batchDoc}: ${pool.length} baris (${added} SKU/lokasi baru ditambahkan, ${updated} stok existing di-update)`);
+        logAudit('IMPORT', 'Barang Masuk', `Import massal ${batchDoc}: ${itemsToInsert.length} baris`);
         rebuildIndexes(); saveState();
         renderBarangTable(); renderLokasiTable(); populateSharedFilters();
+        ui.lastImportResult = { ok: itemsToInsert.length, rejected: ui.importParsed.errors.length };
       } else {
-        // Barang Keluar massal: same running-balance simulation as the preview —
-        // rows that would exceed available stock are skipped, never allowed through.
-        const batchDoc = `BK-IMPORT-${todayStr().replace(/-/g,'')}-${Date.now().toString().slice(-4)}`;
+        // Barang Keluar massal: re-validasi saldo berjalan yang sama seperti pratinjau —
+        // baris yang melebihi stok tersedia tetap ditolak di sini, bukan cuma tampilan.
+        const parsedRows = ui.importParsed.rows;
+        const tanggal = todayStr();
+        const batchDoc = `BK-IMPORT-${tanggal.replace(/-/g,'')}-${Date.now().toString().slice(-4)}`;
         const running = {};
-        let ok = 0, rejected = 0;
-        pool.forEach(p=>{
+        const accepted = [];
+        let rejected = 0;
+        parsedRows.forEach(p=>{
           const key = p.sku_id+'::'+p.location_id;
           if (!(key in running)) running[key] = getQtySystem(p.sku_id, p.location_id);
           if (p.qty > running[key]){ rejected++; return; }
           running[key] -= p.qty;
-          postMovement({ tipe:'OUT', sku_id:p.sku_id, location_id:p.location_id, qty:-p.qty, ref_type:'Barang Keluar (Import Massal)', ref_doc:batchDoc, catatan:'Import massal dari file' });
-          ok++;
+          accepted.push(p);
         });
-        logAudit('IMPORT', 'Barang Keluar', `Import massal ${batchDoc}: ${ok} baris berhasil, ${rejected} baris ditolak (stok tidak cukup)`);
-        saveState();
-        ui.lastImportResult = { ok, rejected };
-        toast(rejected ? `${ok} baris berhasil, ${rejected} baris ditolak karena stok tidak cukup` : `${ok} baris berhasil diimport`, rejected ? 'warning' : 'success');
+        if (!accepted.length){
+          toast('Semua baris ditolak karena stok tidak cukup', 'error');
+          confirmBtn.disabled = false;
+          return;
+        }
+        const itemsToInsert = accepted.map((r,i)=>({
+          id: 'bki-'+Date.now()+Math.random().toString(36).slice(2,5)+i,
+          doc_number: batchDoc, tanggal, waktu: new Date().toISOString().slice(0,19),
+          customer_id: r.customer_id, sku_id: r.sku_id, location_id: r.location_id, warehouse_id: r.warehouse_id,
+          qty: r.qty, no_referensi: r.no_referensi, catatan: r.catatan || 'Import massal dari file',
+          operator_id: ui.currentUser.id,
+        }));
+        const { error } = await supabaseClient.from('barang_keluar_items').insert(itemsToInsert);
+        if (error){
+          console.error('Gagal import massal ke Supabase (barang_keluar_items)', error, itemsToInsert);
+          toast('Gagal menyimpan ke server: '+error.message, 'error');
+          confirmBtn.disabled = false;
+          return;
+        }
+        state.bkCounter += itemsToInsert.length;
+        itemsToInsert.forEach(it=>{
+          state.barangKeluarItems.unshift(it);
+          postMovement({ tipe:'OUT', sku_id:it.sku_id, location_id:it.location_id, qty:-it.qty, ref_type:'Barang Keluar (Import Massal)', ref_doc:batchDoc, customer_id:it.customer_id, catatan: it.catatan });
+        });
+        logAudit('IMPORT', 'Barang Keluar', `Import massal ${batchDoc}: ${itemsToInsert.length} baris berhasil, ${rejected} baris ditolak (stok tidak cukup)`);
+        rebuildIndexes(); saveState();
+        ui.lastImportResult = { ok: itemsToInsert.length, rejected: rejected + ui.importParsed.errors.length };
+        toast(rejected ? `${itemsToInsert.length} baris berhasil, ${rejected} baris ditolak karena stok tidak cukup` : `${itemsToInsert.length} baris berhasil diimport`, rejected ? 'warning' : 'success');
       }
       ui.importStep = 3; renderImportModal();
     });
