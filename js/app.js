@@ -1269,7 +1269,7 @@ function onLokasiSearch(){
     opt.addEventListener('click', ()=>{
       ui.selectedLocationId = opt.dataset.id;
       const l = mLoc[ui.selectedLocationId];
-      document.getElementById('soLokasiInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('soLokasiInput').value = `${l.code}`;
       document.getElementById('soGudang').value = l.warehouse_id;
       dd.classList.remove('open');
       updateLookup();
@@ -1300,7 +1300,7 @@ function onSkuSearch(){
     opt.addEventListener('click', ()=>{
       ui.selectedSkuId = opt.dataset.id;
       const s = mSku[ui.selectedSkuId];
-      document.getElementById('soSkuInput').value = `${s.sku} — ${s.nama_produk}`;
+      document.getElementById('soSkuInput').value = `${s.sku}`;
       dd.classList.remove('open');
       updateLookup();
       document.getElementById('soQtyFisik').focus();
@@ -1513,7 +1513,7 @@ function onBmLokasiSearch(){
     opt.addEventListener('click', ()=>{
       bmSelectedLocationId = opt.dataset.id;
       const l = mLoc[bmSelectedLocationId];
-      document.getElementById('bmLokasiInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('bmLokasiInput').value = `${l.code}`;
       document.getElementById('bmGudang').value = l.warehouse_id;
       dd.classList.remove('open');
       updateBmLookup();
@@ -1535,7 +1535,7 @@ function onBmSkuSearch(){
     opt.addEventListener('click', ()=>{
       bmSelectedSkuId = opt.dataset.id;
       const s = mSku[bmSelectedSkuId];
-      document.getElementById('bmSkuInput').value = `${s.sku} — ${s.nama_produk}`;
+      document.getElementById('bmSkuInput').value = `${s.sku}`;
       dd.classList.remove('open');
       updateBmLookup();
       document.getElementById('bmQtyMasuk').focus();
@@ -1704,7 +1704,7 @@ function onBkLokasiSearch(){
     opt.addEventListener('click', ()=>{
       bkSelectedLocationId = opt.dataset.id;
       const l = mLoc[bkSelectedLocationId];
-      document.getElementById('bkLokasiInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('bkLokasiInput').value = `${l.code}`;
       document.getElementById('bkGudang').value = l.warehouse_id;
       dd.classList.remove('open');
       updateBkLookup();
@@ -1731,7 +1731,7 @@ function onBkSkuSearch(){
     opt.addEventListener('click', ()=>{
       bkSelectedSkuId = opt.dataset.id;
       const s = mSku[bkSelectedSkuId];
-      document.getElementById('bkSkuInput').value = `${s.sku} — ${s.nama_produk}`;
+      document.getElementById('bkSkuInput').value = `${s.sku}`;
       dd.classList.remove('open');
       updateBkLookup();
       document.getElementById('bkQtyKeluar').focus();
@@ -1928,7 +1928,7 @@ function onTgSkuSearch(){
     opt.addEventListener('click', ()=>{
       tgSelectedSkuId = opt.dataset.id;
       const s = mSku[tgSelectedSkuId];
-      document.getElementById('tgSkuInput').value = `${s.sku} — ${s.nama_produk}`;
+      document.getElementById('tgSkuInput').value = `${s.sku}`;
       dd.classList.remove('open');
       updateTgLookup();
     });
@@ -1952,7 +1952,7 @@ function onTgLokasiAsalSearch(){
     opt.addEventListener('click', ()=>{
       tgSelectedAsalId = opt.dataset.id;
       const l = mLoc[tgSelectedAsalId];
-      document.getElementById('tgLokasiAsalInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('tgLokasiAsalInput').value = `${l.code}`;
       dd.classList.remove('open');
       updateTgLookup();
     });
@@ -1971,7 +1971,7 @@ function onTgLokasiTujuanSearch(){
     opt.addEventListener('click', ()=>{
       tgSelectedTujuanId = opt.dataset.id;
       const l = mLoc[tgSelectedTujuanId];
-      document.getElementById('tgLokasiTujuanInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('tgLokasiTujuanInput').value = `${l.code}`;
       dd.classList.remove('open');
     });
   });
@@ -2140,7 +2140,7 @@ function onTlSkuSearch(){
     opt.addEventListener('click', ()=>{
       tlSelectedSkuId = opt.dataset.id;
       const s = mSku[tlSelectedSkuId];
-      document.getElementById('tlSkuInput').value = `${s.sku} — ${s.nama_produk}`;
+      document.getElementById('tlSkuInput').value = `${s.sku}`;
       dd.classList.remove('open');
       updateTlLookup();
     });
@@ -2163,7 +2163,7 @@ function onTlLokasiAsalSearch(){
     opt.addEventListener('click', ()=>{
       tlSelectedAsalId = opt.dataset.id;
       const l = mLoc[tlSelectedAsalId];
-      document.getElementById('tlLokasiAsalInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('tlLokasiAsalInput').value = `${l.code}`;
       dd.classList.remove('open');
       tlSelectedTujuanId = null;
       const tujuanInput = document.getElementById('tlLokasiTujuanInput');
@@ -2188,7 +2188,7 @@ function onTlLokasiTujuanSearch(){
     opt.addEventListener('click', ()=>{
       tlSelectedTujuanId = opt.dataset.id;
       const l = mLoc[tlSelectedTujuanId];
-      document.getElementById('tlLokasiTujuanInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('tlLokasiTujuanInput').value = `${l.code}`;
       dd.classList.remove('open');
     });
   });
@@ -2353,7 +2353,7 @@ function onKsSkuSearch(){
     opt.addEventListener('click', ()=>{
       ksSelectedSkuId = opt.dataset.id;
       const s = mSku[ksSelectedSkuId];
-      document.getElementById('ksSkuInput').value = `${s.sku} — ${s.nama_produk}`;
+      document.getElementById('ksSkuInput').value = `${s.sku}`;
       dd.classList.remove('open');
       ksPage = 1;
       renderKartuStok();
@@ -2377,7 +2377,7 @@ function onKsLokasiSearch(){
     opt.addEventListener('click', ()=>{
       ksSelectedLocationId = opt.dataset.id;
       const l = mLoc[ksSelectedLocationId];
-      document.getElementById('ksLokasiInput').value = `${l.code} — ${l.name}`;
+      document.getElementById('ksLokasiInput').value = `${l.code}`;
       dd.classList.remove('open');
       ksPage = 1;
       renderKartuStok();
