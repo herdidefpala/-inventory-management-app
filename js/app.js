@@ -7,7 +7,7 @@
    ========================================================================== */
 
 const STORAGE_KEY = 'so_app_state_v1';
-const TODAY = new Date('2026-09-11T10:00:00');
+const TODAY = new Date();
 
 let state = null;
 let charts = {};
@@ -369,7 +369,7 @@ async function loadStaffForUser(authUser){
 
   logAudit('LOGIN', 'Auth', `Login sebagai ${ui.role} (${ui.currentUser.name})`);
   saveState();
-  goToPage('dashboard');
+  goToPage(getLastPage());
   return true;
 }
 
@@ -466,7 +466,14 @@ const PAGE_META = {
   'settings': ['Pengaturan', 'Identitas perusahaan dan preferensi sistem'],
 };
 
+const LAST_PAGE_KEY = 'so_app_last_page_v1';
+function getLastPage(){
+  const saved = localStorage.getItem(LAST_PAGE_KEY);
+  return Object.keys(PAGE_META).includes(saved) ? saved : 'dashboard';
+}
+
 function goToPage(page){
+  localStorage.setItem(LAST_PAGE_KEY, page);
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.page===page));
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'page-'+page));
   closeMobileSidebar();
