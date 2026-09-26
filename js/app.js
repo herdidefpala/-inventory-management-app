@@ -1209,8 +1209,8 @@ function initInputSO(){
 
   document.getElementById('soLokasiInput').addEventListener('input', debounce(onLokasiSearch, 180));
   document.getElementById('soSkuInput').addEventListener('input', debounce(onSkuSearch, 180));
-  document.getElementById('soLokasiInput').addEventListener('focus', onLokasiSearch);
-  document.getElementById('soSkuInput').addEventListener('focus', onSkuSearch);
+  document.getElementById('soLokasiInput').addEventListener('focus', ()=>{ if (!ui.selectedLocationId) onLokasiSearch(); });
+  document.getElementById('soSkuInput').addEventListener('focus', ()=>{ if (!ui.selectedSkuId) onSkuSearch(); });
   document.addEventListener('click', (e)=>{
     if (!e.target.closest('#soLokasiInput')) document.getElementById('soLokasiDropdown').classList.remove('open');
     if (!e.target.closest('#soSkuInput')) document.getElementById('soSkuDropdown').classList.remove('open');
@@ -1466,8 +1466,8 @@ function initBarangMasuk(){
 
   document.getElementById('bmLokasiInput').addEventListener('input', debounce(onBmLokasiSearch, 180));
   document.getElementById('bmSkuInput').addEventListener('input', debounce(onBmSkuSearch, 180));
-  document.getElementById('bmLokasiInput').addEventListener('focus', onBmLokasiSearch);
-  document.getElementById('bmSkuInput').addEventListener('focus', onBmSkuSearch);
+  document.getElementById('bmLokasiInput').addEventListener('focus', ()=>{ if (!bmSelectedLocationId) onBmLokasiSearch(); });
+  document.getElementById('bmSkuInput').addEventListener('focus', ()=>{ if (!bmSelectedSkuId) onBmSkuSearch(); });
   document.addEventListener('click', (e)=>{
     if (!e.target.closest('#bmLokasiInput')) document.getElementById('bmLokasiDropdown').classList.remove('open');
     if (!e.target.closest('#bmSkuInput')) document.getElementById('bmSkuDropdown').classList.remove('open');
@@ -1649,8 +1649,8 @@ function initBarangKeluar(){
 
   document.getElementById('bkLokasiInput').addEventListener('input', debounce(onBkLokasiSearch, 180));
   document.getElementById('bkSkuInput').addEventListener('input', debounce(onBkSkuSearch, 180));
-  document.getElementById('bkLokasiInput').addEventListener('focus', onBkLokasiSearch);
-  document.getElementById('bkSkuInput').addEventListener('focus', onBkSkuSearch);
+  document.getElementById('bkLokasiInput').addEventListener('focus', ()=>{ if (!bkSelectedLocationId) onBkLokasiSearch(); });
+  document.getElementById('bkSkuInput').addEventListener('focus', ()=>{ if (!bkSelectedSkuId) onBkSkuSearch(); });
   document.addEventListener('click', (e)=>{
     if (!e.target.closest('#bkLokasiInput')) document.getElementById('bkLokasiDropdown').classList.remove('open');
     if (!e.target.closest('#bkSkuInput')) document.getElementById('bkSkuDropdown').classList.remove('open');
@@ -1869,11 +1869,11 @@ function initTransferGudang(){
   document.getElementById('tgTanggal').value = todayStr();
 
   document.getElementById('tgSkuInput').addEventListener('input', debounce(onTgSkuSearch, 180));
-  document.getElementById('tgSkuInput').addEventListener('focus', onTgSkuSearch);
+  document.getElementById('tgSkuInput').addEventListener('focus', ()=>{ if (!tgSelectedSkuId) onTgSkuSearch(); });
   document.getElementById('tgLokasiAsalInput').addEventListener('input', debounce(onTgLokasiAsalSearch, 180));
-  document.getElementById('tgLokasiAsalInput').addEventListener('focus', onTgLokasiAsalSearch);
+  document.getElementById('tgLokasiAsalInput').addEventListener('focus', ()=>{ if (!tgSelectedAsalId) onTgLokasiAsalSearch(); });
   document.getElementById('tgLokasiTujuanInput').addEventListener('input', debounce(onTgLokasiTujuanSearch, 180));
-  document.getElementById('tgLokasiTujuanInput').addEventListener('focus', onTgLokasiTujuanSearch);
+  document.getElementById('tgLokasiTujuanInput').addEventListener('focus', ()=>{ if (!tgSelectedTujuanId) onTgLokasiTujuanSearch(); });
   document.getElementById('tgGudangAsal').addEventListener('change', ()=>{
     tgSelectedAsalId = null; document.getElementById('tgLokasiAsalInput').value='';
     document.getElementById('tgLookupFilled').classList.add('hidden');
@@ -2095,11 +2095,11 @@ function initTransferLokasi(){
   document.getElementById('tlTanggal').value = todayStr();
 
   document.getElementById('tlSkuInput').addEventListener('input', debounce(onTlSkuSearch, 180));
-  document.getElementById('tlSkuInput').addEventListener('focus', onTlSkuSearch);
+  document.getElementById('tlSkuInput').addEventListener('focus', ()=>{ if (!tlSelectedSkuId) onTlSkuSearch(); });
   document.getElementById('tlLokasiAsalInput').addEventListener('input', debounce(onTlLokasiAsalSearch, 180));
-  document.getElementById('tlLokasiAsalInput').addEventListener('focus', onTlLokasiAsalSearch);
+  document.getElementById('tlLokasiAsalInput').addEventListener('focus', ()=>{ if (!tlSelectedAsalId) onTlLokasiAsalSearch(); });
   document.getElementById('tlLokasiTujuanInput').addEventListener('input', debounce(onTlLokasiTujuanSearch, 180));
-  document.getElementById('tlLokasiTujuanInput').addEventListener('focus', onTlLokasiTujuanSearch);
+  document.getElementById('tlLokasiTujuanInput').addEventListener('focus', ()=>{ if (!tlSelectedTujuanId) onTlLokasiTujuanSearch(); });
   document.getElementById('tlQty').addEventListener('input', validateTlQty);
 
   document.addEventListener('click', (e)=>{
@@ -2320,9 +2320,9 @@ let ksSelectedSkuId = null, ksSelectedLocationId = null, ksPage = 1;
 
 function initLaporanStock(){
   document.getElementById('ksSkuInput').addEventListener('input', debounce(onKsSkuSearch, 180));
-  document.getElementById('ksSkuInput').addEventListener('focus', onKsSkuSearch);
+  document.getElementById('ksSkuInput').addEventListener('focus', ()=>{ if (!ksSelectedSkuId) onKsSkuSearch(); });
   document.getElementById('ksLokasiInput').addEventListener('input', debounce(onKsLokasiSearch, 180));
-  document.getElementById('ksLokasiInput').addEventListener('focus', onKsLokasiSearch);
+  document.getElementById('ksLokasiInput').addEventListener('focus', ()=>{ if (!ksSelectedLocationId) onKsLokasiSearch(); });
   document.addEventListener('click', (e)=>{
     if (!e.target.closest('#ksSkuInput')) document.getElementById('ksSkuDropdown').classList.remove('open');
     if (!e.target.closest('#ksLokasiInput')) document.getElementById('ksLokasiDropdown').classList.remove('open');
