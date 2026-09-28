@@ -36,6 +36,8 @@ function loadState(){
       const defaultPerms = defaultPermissions();
       parsed.permissions = parsed.permissions || {};
       Object.keys(defaultPerms).forEach(m=>{ if (!parsed.permissions[m]) parsed.permissions[m] = defaultPerms[m]; });
+      parsed.returItems = parsed.returItems || [];
+      if (parsed.returCounter === undefined) parsed.returCounter = 0;
       parsed.settings = parsed.settings || {};
       if (parsed.settings.low_stock_threshold === undefined) parsed.settings.low_stock_threshold = SEED_SETTINGS.low_stock_threshold;
       if (parsed.settings.default_warehouse_id === undefined) parsed.settings.default_warehouse_id = SEED_SETTINGS.default_warehouse_id;
@@ -56,6 +58,7 @@ function loadState(){
     barangKeluarItems: SEED_BARANG_KELUAR,
     transferGudangItems: SEED_TRANSFER_GUDANG,
     transferLokasiItems: SEED_TRANSFER_LOKASI,
+    returItems: [],
     auditLogs: SEED_AUDIT_LOGS,
     settings: SEED_SETTINGS,
     permissions: defaultPermissions(),
@@ -64,12 +67,13 @@ function loadState(){
     bkCounter: 20,
     tgCounter: 15,
     tlCounter: 15,
+    returCounter: 0,
   };
 }
 
 function defaultPermissions(){
-  const modules = ['Dashboard','Stock Gudang','Input SO','Input Barang Masuk','Input Barang Keluar','Transfer Antar Gudang','Transfer Antar Lokasi','Laporan Stock','Rekap SO','Master Data','Audit Log','Pengaturan'];
-  const operatorCreateModules = ['Stock Gudang','Input SO','Input Barang Masuk','Input Barang Keluar','Transfer Antar Gudang','Transfer Antar Lokasi'];
+  const modules = ['Dashboard','Stock Gudang','Input SO','Input Barang Masuk','Input Barang Keluar','Transfer Antar Gudang','Transfer Antar Lokasi','Retur','Laporan Stock','Rekap SO','Master Data','Audit Log','Pengaturan'];
+  const operatorCreateModules = ['Stock Gudang','Input SO','Input Barang Masuk','Input Barang Keluar','Transfer Antar Gudang','Transfer Antar Lokasi','Retur'];
   const operatorNoViewModules = ['Master Data','Audit Log','Pengaturan'];
   const perms = {};
   modules.forEach(m=>{
@@ -299,7 +303,7 @@ async function loadTransactionsFromSupabase(){
   // saat login, jadi tiap device cuma melihat riwayat lokalnya sendiri.
   // Fetch semuanya di sini, urutkan terbaru-dulu (sama seperti pola
   // .unshift() yang dipakai saat menambah item baru secara lokal).
-  const [mv, so, bm, bk, tg, tl, logs] = await Promise.all([
+  const [mv, so, bm, bk, tg, tl, logs, rt] = await Promise.all([
     supabaseClient.from('stock_movements').select('*'),
     supabaseClient.from('so_items').select('*'),
     supabaseClient.from('barang_masuk_items').select('*'),
@@ -307,6 +311,7 @@ async function loadTransactionsFromSupabase(){
     supabaseClient.from('transfer_gudang_items').select('*'),
     supabaseClient.from('transfer_lokasi_items').select('*'),
     supabaseClient.from('audit_logs').select('*'),
+    supabaseClient.from('retur_items').select('*'),
   ]);
   const byWaktuDesc = (a,b)=> (b.waktu||'').localeCompare(a.waktu||'');
   if (mv.error) console.error('Gagal memuat stock_movements dari Supabase', mv.error); else state.stockMovements = mv.data;
@@ -320,6 +325,8 @@ async function loadTransactionsFromSupabase(){
   else { state.transferGudangItems = tg.data.sort(byWaktuDesc); state.tgCounter = Math.max(state.tgCounter, state.transferGudangItems.length); }
   if (tl.error) console.error('Gagal memuat transfer_lokasi_items dari Supabase', tl.error);
   else { state.transferLokasiItems = tl.data.sort(byWaktuDesc); state.tlCounter = Math.max(state.tlCounter, state.transferLokasiItems.length); }
+  if (rt.error) console.error('Gagal memuat retur_items dari Supabase (tabel sudah dibuat?)', rt.error);
+  else { state.returItems = rt.data.sort(byWaktuDesc); state.returCounter = Math.max(state.returCounter || 0, new Set(rt.data.map(r=>r.doc_number)).size); }
   if (logs.error) console.error('Gagal memuat audit_logs dari Supabase', logs.error);
   else state.auditLogs = logs.data.sort((a,b)=> (b.created_at||'').localeCompare(a.created_at||''));
 }
@@ -459,6 +466,7 @@ const PAGE_META = {
   'barang-keluar': ['Input Barang Keluar', 'Catat pengeluaran barang untuk customer'],
   'transfer-gudang': ['Transfer Antar Gudang', 'Pindahkan stok dari satu gudang ke gudang lain'],
   'transfer-lokasi': ['Transfer Antar Lokasi', 'Pindahkan stok antar lokasi dalam satu gudang'],
+  'retur': ['Retur', 'Catat retur dari customer — diterima ke stok atau ditolak ke Gudang Retur Sementara'],
   'laporan-stock': ['Laporan Stock', 'Kartu stok — riwayat mutasi lengkap per SKU'],
   'rekap': ['Rekap Stock Opname', 'Telusuri dan ekspor seluruh hasil stock opname'],
   'master': ['Master Data', 'Kelola data acuan barang, lokasi, dan staff'],
@@ -489,6 +497,7 @@ function goToPage(page){
   if (page==='barang-keluar') renderBarangKeluar();
   if (page==='transfer-gudang') renderTransferGudang();
   if (page==='transfer-lokasi') renderTransferLokasi();
+  if (page==='retur') renderRetur();
   if (page==='laporan-stock') renderLaporanStock();
   if (page==='rekap') renderRekap();
   if (page==='master') renderMaster();
@@ -2304,6 +2313,294 @@ function renderTlTodayFeed(){
 }
 
 /* ==========================================================================
+   RETUR (dari Customer)
+   Satu nomor retur bisa berisi banyak SKU. Tiap SKU dipisah menjadi:
+   - Qty Diterima -> mutasi masuk ke lokasi penyimpanan biasa (stok normal)
+   - Qty Ditolak  -> mutasi masuk ke lokasi di "Gudang Retur Sementara"
+     (dibuat otomatis kalau belum ada), jadi tolakan tetap tercatat fisiknya
+     tapi terpisah dari stok yang siap dijual.
+   ========================================================================== */
+
+const RETUR_WAREHOUSE = { id:'wh-retur-sementara', code:'WH-RETUR', name:'Gudang Retur Sementara' };
+const RETUR_LOCATION = { id:'loc-retur-sementara', code:'RETUR-SEMENTARA', name:'Area Retur Sementara', type:'Returan Sementara' };
+
+let rtSelectedLocationId = null, rtSelectedSkuId = null;
+let rtLines = []; // item yang sudah ditambahkan ke daftar tapi belum disimpan
+
+const escHtml = (s)=> String(s ?? '').replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+function isReturLocation(l){
+  const wh = mWh[l.warehouse_id];
+  return l.location_type === RETUR_LOCATION.type || l.id === RETUR_LOCATION.id ||
+    (wh && (wh.id === RETUR_WAREHOUSE.id || (wh.name||'').trim().toLowerCase() === RETUR_WAREHOUSE.name.toLowerCase()));
+}
+
+function initRetur(){
+  document.getElementById('rtTanggal').value = todayStr();
+
+  const lokInput = document.getElementById('rtLokasiInput');
+  const skuInput = document.getElementById('rtSkuInput');
+  // Mengetik ulang berarti pilihan lama tidak berlaku lagi — harus pilih dari daftar.
+  lokInput.addEventListener('input', ()=>{ rtSelectedLocationId = null; });
+  skuInput.addEventListener('input', ()=>{ rtSelectedSkuId = null; });
+  lokInput.addEventListener('input', debounce(onRtLokasiSearch, 180));
+  skuInput.addEventListener('input', debounce(onRtSkuSearch, 180));
+  lokInput.addEventListener('focus', ()=>{ if (!rtSelectedLocationId) onRtLokasiSearch(); });
+  skuInput.addEventListener('focus', ()=>{ if (!rtSelectedSkuId) onRtSkuSearch(); });
+  document.addEventListener('click', (e)=>{
+    if (!e.target.closest('#rtLokasiInput')) document.getElementById('rtLokasiDropdown').classList.remove('open');
+    if (!e.target.closest('#rtSkuInput')) document.getElementById('rtSkuDropdown').classList.remove('open');
+  });
+
+  document.getElementById('btnAddReturLine').addEventListener('click', addReturLine);
+  // Enter di kolom qty/alasan menambah item ke daftar, bukan menyimpan seluruh retur.
+  ['rtQtyTerima','rtQtyTolak','rtAlasan'].forEach(id=>{
+    document.getElementById(id).addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter'){ e.preventDefault(); addReturLine(); }
+    });
+  });
+  document.getElementById('rtLinesBody').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-idx]');
+    if (!btn) return;
+    rtLines.splice(parseInt(btn.dataset.idx,10), 1);
+    renderReturLines();
+  });
+
+  document.getElementById('formRetur').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    await submitRetur();
+  });
+}
+
+function renderRetur(){
+  const custSel = document.getElementById('rtCustomer');
+  const prevCustomer = custSel.value;
+  fillSelect(document.getElementById('rtOperator'), state.staff.filter(s=>s.is_active), { value:s=>s.id, label:s=>s.name, keepFirst:false });
+  fillSelect(custSel, state.customers.filter(c=>c.is_active), { value:c=>c.id, label:c=>c.name, keepFirst:false });
+  if (prevCustomer && mCustomer[prevCustomer]) custSel.value = prevCustomer;
+  if (ui.role === 'Operator'){
+    document.getElementById('rtOperator').value = ui.currentUser.id;
+    document.getElementById('rtOperator').disabled = true;
+  } else {
+    document.getElementById('rtOperator').disabled = false;
+  }
+  renderReturLines();
+  renderRtTodayFeed();
+}
+
+function onRtLokasiSearch(){
+  const q = document.getElementById('rtLokasiInput').value.trim().toLowerCase();
+  const dd = document.getElementById('rtLokasiDropdown');
+  const results = state.locations.filter(l=>l.is_active && !isReturLocation(l) && (l.code.toLowerCase().includes(q) || l.name.toLowerCase().includes(q))).slice(0,8);
+  dd.innerHTML = results.length ? results.map(l=>`
+    <div class="combo-option" data-id="${l.id}">
+      <div class="combo-option-title">${escHtml(l.code)}</div>
+      <div class="combo-option-sub">${escHtml(l.name)} · ${escHtml(l.location_type)} · ${escHtml(safeWh(l.warehouse_id).name)}</div>
+    </div>`).join('') : `<div class="combo-empty">Lokasi tidak ditemukan</div>`;
+  dd.classList.add('open');
+  dd.querySelectorAll('.combo-option').forEach(opt=>{
+    opt.addEventListener('click', ()=>{
+      rtSelectedLocationId = opt.dataset.id;
+      document.getElementById('rtLokasiInput').value = mLoc[rtSelectedLocationId].code;
+      dd.classList.remove('open');
+    });
+  });
+}
+
+function onRtSkuSearch(){
+  const q = document.getElementById('rtSkuInput').value.trim().toLowerCase();
+  const dd = document.getElementById('rtSkuDropdown');
+  const results = state.skus.filter(s=>s.is_active && (s.sku.toLowerCase().includes(q) || s.nama_produk.toLowerCase().includes(q))).slice(0,8);
+  dd.innerHTML = results.length ? results.map(s=>`
+    <div class="combo-option" data-id="${s.id}">
+      <div class="combo-option-title">${escHtml(s.sku)}</div>
+      <div class="combo-option-sub">${escHtml(s.nama_produk)}</div>
+    </div>`).join('') : `<div class="combo-empty">SKU tidak ditemukan</div>`;
+  dd.classList.add('open');
+  dd.querySelectorAll('.combo-option').forEach(opt=>{
+    opt.addEventListener('click', ()=>{
+      rtSelectedSkuId = opt.dataset.id;
+      document.getElementById('rtSkuInput').value = mSku[rtSelectedSkuId].sku;
+      dd.classList.remove('open');
+      document.getElementById('rtQtyTerima').focus();
+    });
+  });
+}
+
+function addReturLine(){
+  if (!rtSelectedSkuId){ toast('Pilih SKU dari daftar terlebih dahulu', 'warning'); return; }
+  const terima = parseFloat(document.getElementById('rtQtyTerima').value || '0');
+  const tolak = parseFloat(document.getElementById('rtQtyTolak').value || '0');
+  const alasan = document.getElementById('rtAlasan').value.trim();
+  if (!Number.isFinite(terima) || !Number.isFinite(tolak) || terima < 0 || tolak < 0){
+    toast('Qty tidak boleh negatif', 'warning'); return;
+  }
+  if (terima + tolak <= 0){ toast('Isi Qty Diterima dan/atau Qty Ditolak (> 0)', 'warning'); return; }
+  if (terima > 0 && !rtSelectedLocationId){ toast('Pilih lokasi penyimpanan untuk barang yang diterima', 'warning'); return; }
+  if (tolak > 0 && !alasan){ toast('Isi alasan penolakan untuk barang yang ditolak', 'warning'); return; }
+
+  rtLines.push({
+    sku_id: rtSelectedSkuId,
+    location_id: terima > 0 ? rtSelectedLocationId : null,
+    qty_diterima: terima, qty_ditolak: tolak,
+    alasan_tolak: tolak > 0 ? alasan : '',
+  });
+  // Lokasi dipertahankan (SKU berikutnya biasanya di lokasi yang sama); SKU & qty dikosongkan.
+  rtSelectedSkuId = null;
+  document.getElementById('rtSkuInput').value = '';
+  document.getElementById('rtQtyTerima').value = '';
+  document.getElementById('rtQtyTolak').value = '';
+  document.getElementById('rtAlasan').value = '';
+  renderReturLines();
+  document.getElementById('rtSkuInput').focus();
+}
+
+function renderReturLines(){
+  const body = document.getElementById('rtLinesBody');
+  if (!rtLines.length){
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center;opacity:.65;">Belum ada item. Pilih SKU lalu klik "Tambah ke Daftar".</td></tr>`;
+    document.getElementById('rtLinesSummary').textContent = '';
+    return;
+  }
+  body.innerHTML = rtLines.map((l,i)=>{
+    const sku = safeSku(l.sku_id);
+    const lokLabel = l.qty_diterima > 0 ? ` <span class="text-muted-sm">@ ${escHtml(safeLoc(l.location_id).code)}</span>` : '';
+    return `<tr>
+      <td class="cell-strong">${escHtml(sku.sku)}</td>
+      <td>${escHtml(sku.nama_produk)}</td>
+      <td>${fmtNum(l.qty_diterima)}${lokLabel}</td>
+      <td>${fmtNum(l.qty_ditolak)}</td>
+      <td>${escHtml(l.alasan_tolak) || '—'}</td>
+      <td><button type="button" class="btn btn-outline" data-idx="${i}">Hapus</button></td>
+    </tr>`;
+  }).join('');
+  const totalTerima = rtLines.reduce((a,l)=>a+l.qty_diterima,0);
+  const totalTolak = rtLines.reduce((a,l)=>a+l.qty_ditolak,0);
+  document.getElementById('rtLinesSummary').textContent =
+    `${rtLines.length} item · total diterima ${fmtNum(totalTerima)} · total ditolak ${fmtNum(totalTolak)}` +
+    (totalTolak > 0 ? ` (masuk ke ${RETUR_WAREHOUSE.name})` : '');
+}
+
+// Pastikan Gudang Retur Sementara + satu lokasi di dalamnya ada; buat otomatis kalau belum.
+// Mengembalikan objek lokasi, atau null kalau gagal (toast sudah ditampilkan).
+async function ensureReturLocation(){
+  let wh = state.warehouses.find(w=> w.id === RETUR_WAREHOUSE.id || (w.name||'').trim().toLowerCase() === RETUR_WAREHOUSE.name.toLowerCase());
+  if (!wh){
+    const row = { id:RETUR_WAREHOUSE.id, code:RETUR_WAREHOUSE.code, name:RETUR_WAREHOUSE.name, address:'', pic:'', phone:'', is_active:true };
+    const { error } = await supabaseClient.from('warehouses').insert(row);
+    if (error){
+      console.error('Gagal membuat Gudang Retur Sementara', error, row);
+      toast('Gagal membuat Gudang Retur Sementara: '+error.message, 'error');
+      return null;
+    }
+    state.warehouses.push(row); wh = row;
+    logAudit('CREATE','Master Gudang',`Gudang Retur Sementara (${row.code}) dibuat otomatis oleh menu Retur`);
+  }
+  let loc = state.locations.find(l=> l.warehouse_id === wh.id && l.code === RETUR_LOCATION.code) || state.locations.find(l=> l.warehouse_id === wh.id);
+  if (!loc){
+    const row = { id:RETUR_LOCATION.id, code:RETUR_LOCATION.code, name:RETUR_LOCATION.name, warehouse_id:wh.id, location_type:RETUR_LOCATION.type, is_active:true };
+    const { error } = await supabaseClient.from('locations').insert(row);
+    if (error){
+      console.error('Gagal membuat lokasi Retur Sementara', error, row);
+      toast('Gagal membuat lokasi di Gudang Retur Sementara: '+error.message, 'error');
+      rebuildIndexes();
+      return null;
+    }
+    state.locations.push(row); loc = row;
+    logAudit('CREATE','Master Lokasi',`Lokasi ${row.code} dibuat otomatis di ${wh.name}`);
+  }
+  rebuildIndexes();
+  return loc;
+}
+
+async function submitRetur(){
+  if (!rtLines.length){ toast('Tambahkan minimal satu item retur ke daftar', 'warning'); return; }
+  const customerId = document.getElementById('rtCustomer').value;
+  if (!customerId){ toast('Pilih Customer terlebih dahulu', 'warning'); return; }
+
+  const btn = document.querySelector('#formRetur button[type=submit]');
+  btn.disabled = true;
+  try {
+    const tanggal = document.getElementById('rtTanggal').value || todayStr();
+    const noRef = document.getElementById('rtNoRef').value.trim();
+    const catatan = document.getElementById('rtCatatan').value.trim();
+    const operatorId = document.getElementById('rtOperator').value;
+    const customer = safeCustomer(customerId);
+    const docNumber = `RT-${tanggal.replace(/-/g,'')}-${String((state.returCounter||0)+1).padStart(3,'0')}`;
+
+    let rejectLoc = null;
+    if (rtLines.some(l=>l.qty_ditolak > 0)){
+      rejectLoc = await ensureReturLocation();
+      if (!rejectLoc) return;
+    }
+
+    const waktu = new Date().toISOString().slice(0,19);
+    const items = rtLines.map((l,i)=>({
+      id: 'rti-'+Date.now()+'-'+i, doc_number: docNumber, tanggal, waktu,
+      customer_id: customerId, sku_id: l.sku_id,
+      location_id: l.location_id, warehouse_id: l.location_id ? mLoc[l.location_id].warehouse_id : null,
+      qty_diterima: l.qty_diterima, qty_ditolak: l.qty_ditolak, alasan_tolak: l.alasan_tolak,
+      reject_location_id: l.qty_ditolak > 0 ? rejectLoc.id : null,
+      no_referensi: noRef, catatan, operator_id: operatorId,
+    }));
+
+    // Server dulu; kalau gagal tidak ada yang berubah di data lokal.
+    const { error } = await supabaseClient.from('retur_items').insert(items);
+    if (error){
+      console.error('Gagal menyimpan retur_items ke Supabase', error, items);
+      toast('Gagal menyimpan ke server: '+error.message, 'error');
+      return;
+    }
+    state.returCounter = (state.returCounter||0) + 1;
+    state.returItems.unshift(...items);
+
+    for (const it of items){
+      if (it.qty_diterima > 0){
+        await postMovement({ tipe:'IN', sku_id:it.sku_id, location_id:it.location_id, qty:it.qty_diterima,
+          ref_type:'Retur Customer (Diterima)', ref_doc:docNumber, customer_id:customerId,
+          catatan: catatan || `Retur diterima dari ${customer.name}` });
+      }
+      if (it.qty_ditolak > 0){
+        await postMovement({ tipe:'IN', sku_id:it.sku_id, location_id:rejectLoc.id, qty:it.qty_ditolak,
+          ref_type:'Retur Customer (Ditolak)', ref_doc:docNumber, customer_id:customerId,
+          catatan: `Ditolak: ${it.alasan_tolak}` });
+      }
+    }
+    const totalTerima = items.reduce((a,i)=>a+i.qty_diterima,0);
+    const totalTolak = items.reduce((a,i)=>a+i.qty_ditolak,0);
+    await logAudit('CREATE','Retur',`${docNumber}: ${items.length} SKU dari ${customer.name} — diterima ${fmtNum(totalTerima)}, ditolak ${fmtNum(totalTolak)}`);
+    saveState();
+    toast(`Retur tersimpan — ${docNumber}`);
+
+    rtLines = []; rtSelectedSkuId = null; rtSelectedLocationId = null;
+    ['rtSkuInput','rtLokasiInput','rtQtyTerima','rtQtyTolak','rtAlasan','rtNoRef','rtCatatan'].forEach(id=> document.getElementById(id).value = '');
+    renderReturLines();
+    renderRtTodayFeed();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderRtTodayFeed(){
+  const docs = {};
+  state.returItems.filter(i=>i.tanggal===todayStr()).forEach(i=>{
+    const d = docs[i.doc_number] = docs[i.doc_number] || { doc:i.doc_number, waktu:i.waktu, customer_id:i.customer_id, n:0, terima:0, tolak:0 };
+    d.n += 1; d.terima += i.qty_diterima; d.tolak += i.qty_ditolak;
+  });
+  const list = Object.values(docs).sort((a,b)=> (b.waktu||'').localeCompare(a.waktu||''));
+  document.getElementById('rtTodayCount').textContent = list.length;
+  document.getElementById('rtTodayInputList').innerHTML = list.length ? list.map(d=>`
+    <div class="feed-item">
+      <div class="feed-item-top">
+        <span class="feed-item-sku">${escHtml(d.doc)}</span>
+        <span class="badge badge-info">${d.n} SKU</span>
+      </div>
+      <div class="feed-item-name">${escHtml(safeCustomer(d.customer_id).name)}</div>
+      <div class="feed-item-meta">Diterima ${fmtNum(d.terima)} · Ditolak ${fmtNum(d.tolak)} · ${escHtml((fmtDateTime(d.waktu).split('·')[1]||'').trim())}</div>
+    </div>`).join('') : `<div class="feed-empty">Belum ada retur hari ini.</div>`;
+}
+
+/* ==========================================================================
    LAPORAN STOCK (Kartu Stok)
    The complementary report to Stock Gudang: instead of "what's the position
    right now", this shows the full movement trail for one SKU with a running
@@ -3791,6 +4088,7 @@ function init(){
   initBarangKeluar();
   initTransferGudang();
   initTransferLokasi();
+  initRetur();
   initLaporanStock();
   initRekap();
   initMaster();
