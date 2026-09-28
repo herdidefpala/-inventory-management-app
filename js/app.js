@@ -3694,48 +3694,78 @@ function renderSettings(){
   });
 }
 
-function doResetData(){
+async function doResetData(){
+  if (ui.role !== 'Admin'){ toast('Hanya Admin yang boleh mereset data','error'); return; }
   const scope = document.getElementById('resetScope').value;
   const val = document.getElementById('resetScopeValue').value.trim();
   if (!val){ toast('Isi nilai cakupan reset terlebih dahulu','warning'); return; }
+  if (scope==='periode' && !(parseInt(val,10) > 0)){ toast('Untuk cakupan periode, isi jumlah hari berupa angka lebih dari 0','warning'); return; }
 
-  Swal.fire({
-    title:'Reset data terjadwal?',
-    html:`Cakupan: <b>${document.getElementById('resetScope').selectedOptions[0].textContent}</b> — <b>${val}</b><br>Tindakan ini tidak dapat dibatalkan.`,
-    icon:'warning', showCancelButton:true, confirmButtonText:'Lanjutkan', cancelButtonText:'Batal', confirmButtonColor:'#DC2626'
-  }).then(res=>{
+  const btn = document.getElementById('btnResetData');
+  btn.disabled = true;
+  try {
+    // Ambil data terbaru dari server dulu, supaya yang dihitung & dihapus sama
+    // dengan isi database sebenarnya (device lain bisa saja sudah menambah data).
+    await loadTransactionsFromSupabase();
+
+    let matchFn;
+    if (scope==='periode'){
+      const cutoff = daysAgoStr(parseInt(val,10));
+      matchFn = i => i.tanggal >= cutoff;
+    } else if (scope==='gudang'){
+      matchFn = i => safeWh(i.warehouse_id).name.toLowerCase() === val.toLowerCase() || safeWh(i.warehouse_id).code.toLowerCase() === val.toLowerCase();
+    } else if (scope==='operator'){
+      matchFn = i => safeStaff(i.operator_id).name.toLowerCase().includes(val.toLowerCase()) || safeStaff(i.operator_id).email.toLowerCase()===val.toLowerCase();
+    } else {
+      matchFn = i => i.so_number.toLowerCase() === val.toLowerCase();
+    }
+    const toRemove = state.soItems.filter(matchFn);
+    if (!toRemove.length){ toast('Tidak ada data SO yang cocok dengan cakupan ini','warning'); return; }
+    const removedDocs = new Set(toRemove.map(i=>i.so_number));
+    // Koreksi ledger dari SO yang dihapus harus ikut dihapus, kalau tidak Qty Stock jadi salah.
+    const movToRemove = state.stockMovements.filter(m=> removedDocs.has(m.ref_doc) && m.tipe==='SO_ADJUSTMENT');
+
+    const res = await Swal.fire({
+      title:'Reset data SO?',
+      html:`Cakupan: <b>${document.getElementById('resetScope').selectedOptions[0].textContent}</b> — <b>${val}</b><br><b>${toRemove.length}</b> baris SO (dari ${removedDocs.size} dokumen) dan <b>${movToRemove.length}</b> mutasi ledger terkait akan dihapus permanen dari database.<br>Tindakan ini tidak dapat dibatalkan.`,
+      icon:'warning', showCancelButton:true, confirmButtonText:'Lanjutkan', cancelButtonText:'Batal', confirmButtonColor:'#DC2626'
+    });
     if (!res.isConfirmed) return;
-    Swal.fire({
+    const res2 = await Swal.fire({
       title:'Ketik RESET untuk konfirmasi akhir', input:'text', inputPlaceholder:'RESET',
       showCancelButton:true, confirmButtonText:'Reset Sekarang', confirmButtonColor:'#DC2626',
       preConfirm:(v)=>{ if (v!=='RESET'){ Swal.showValidationMessage('Ketik persis: RESET'); return false; } return true; }
-    }).then(res2=>{
-      if (!res2.isConfirmed) return;
-      let matchFn;
-      if (scope==='periode'){
-        const days = parseInt(val,10) || 0;
-        const cutoff = daysAgoStr(days);
-        matchFn = i => i.tanggal >= cutoff;
-      } else if (scope==='gudang'){
-        matchFn = i => safeWh(i.warehouse_id).name.toLowerCase() === val.toLowerCase() || safeWh(i.warehouse_id).code.toLowerCase() === val.toLowerCase();
-      } else if (scope==='operator'){
-        matchFn = i => safeStaff(i.operator_id).name.toLowerCase().includes(val.toLowerCase()) || safeStaff(i.operator_id).email.toLowerCase()===val.toLowerCase();
-      } else {
-        matchFn = i => i.so_number.toLowerCase() === val.toLowerCase();
-      }
-      const toRemove = state.soItems.filter(matchFn);
-      const removedDocs = new Set(toRemove.map(i=>i.so_number));
-      state.soItems = state.soItems.filter(i=>!matchFn(i));
-      // A reset that only deleted the SO record but left its ledger correction in
-      // place would silently leave Qty Stock wrong — remove both together.
-      const movBefore = state.stockMovements.length;
-      state.stockMovements = state.stockMovements.filter(m=> !(removedDocs.has(m.ref_doc) && m.tipe==='SO_ADJUSTMENT'));
-      const movRemoved = movBefore - state.stockMovements.length;
-      logAudit('DELETE','Pengaturan',`Reset data (${scope}: ${val}) — ${toRemove.length} baris SO + ${movRemoved} mutasi ledger terkait dihapus`);
-      saveState();
-      toast(`${toRemove.length} baris data SO (dan ${movRemoved} mutasi ledger terkait) direset`);
     });
-  });
+    if (!res2.isConfirmed) return;
+
+    // Hapus di server dulu; data lokal baru berubah kalau server berhasil.
+    // Mutasi ledger dihapus lebih dulu: kalau langkah SO gagal, mengulang reset
+    // dengan cakupan yang sama tetap bisa membereskan sisanya.
+    const chunk = (arr, n)=>{ const out=[]; for (let i=0;i<arr.length;i+=n) out.push(arr.slice(i,i+n)); return out; };
+    const fail = async (table, error)=>{
+      console.error('Gagal reset data di Supabase ('+table+')', error);
+      toast('Gagal menghapus dari server: '+error.message+' — data ditampilkan ulang sesuai isi server','error');
+      await loadTransactionsFromSupabase(); // sinkronkan ulang kalau sebagian sudah terhapus
+    };
+    for (const ids of chunk(movToRemove.map(m=>m.id), 100)){
+      const { error } = await supabaseClient.from('stock_movements').delete().in('id', ids);
+      if (error){ await fail('stock_movements', error); return; }
+    }
+    for (const ids of chunk(toRemove.map(i=>i.id), 100)){
+      const { error } = await supabaseClient.from('so_items').delete().in('id', ids);
+      if (error){ await fail('so_items', error); return; }
+    }
+
+    const removedIds = new Set(toRemove.map(i=>i.id));
+    const removedMovIds = new Set(movToRemove.map(m=>m.id));
+    state.soItems = state.soItems.filter(i=>!removedIds.has(i.id));
+    state.stockMovements = state.stockMovements.filter(m=>!removedMovIds.has(m.id));
+    logAudit('DELETE','Pengaturan',`Reset data (${scope}: ${val}) — ${toRemove.length} baris SO + ${movToRemove.length} mutasi ledger terkait dihapus`);
+    saveState();
+    toast(`${toRemove.length} baris data SO (dan ${movToRemove.length} mutasi ledger terkait) direset`);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ==========================================================================
