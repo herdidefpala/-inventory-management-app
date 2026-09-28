@@ -125,6 +125,9 @@
       <button class="nav-item" data-page="transfer-lokasi">
         <span class="material-symbols-outlined">compare_arrows</span> Transfer Antar Lokasi
       </button>
+      <button class="nav-item" data-page="retur">
+        <span class="material-symbols-outlined">assignment_return</span> Retur
+      </button>
       <button class="nav-item" data-page="laporan-stock">
         <span class="material-symbols-outlined">receipt_long</span> Laporan Stock
       </button>
@@ -828,6 +831,102 @@
           <aside class="card input-so-feed">
             <div class="card-head"><h3>Input Hari Ini</h3><span class="badge badge-info" id="tlTodayCount">0</span></div>
             <div class="feed-list" id="tlTodayInputList"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ================= RETUR ================= -->
+      <section class="page" id="page-retur">
+        <div class="page-header">
+          <p class="page-header-sub">Catat retur dari customer — barang yang diterima masuk ke stok, barang yang ditolak otomatis masuk Gudang Retur Sementara.</p>
+        </div>
+
+        <div class="input-so-grid">
+          <div class="card input-so-card">
+            <form id="formRetur">
+              <div class="form-grid form-grid-4">
+                <label class="field">
+                  <span class="field-label">Tanggal</span>
+                  <input type="date" id="rtTanggal" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">Operator</span>
+                  <select id="rtOperator" required></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">Customer <span class="req">*</span></span>
+                  <select id="rtCustomer" required></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">No Referensi / Dokumen Asal</span>
+                  <input type="text" id="rtNoRef" placeholder="Surat jalan / invoice asal (opsional)" />
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field combo-field">
+                  <span class="field-label">Lokasi Penyimpanan (barang diterima)</span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">location_on</span>
+                    <input type="text" id="rtLokasiInput" placeholder="Cari kode / nama lokasi…" autocomplete="off" />
+                  </div>
+                  <div class="combo-dropdown" id="rtLokasiDropdown"></div>
+                </label>
+                <label class="field combo-field">
+                  <span class="field-label">SKU</span>
+                  <div class="combo-box">
+                    <span class="material-symbols-outlined combo-ic">qr_code_2</span>
+                    <input type="text" id="rtSkuInput" placeholder="Cari SKU / nama produk…" autocomplete="off" />
+                  </div>
+                  <div class="combo-dropdown" id="rtSkuDropdown"></div>
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-2">
+                <label class="field">
+                  <span class="field-label">Qty Diterima</span>
+                  <input type="number" id="rtQtyTerima" min="0" placeholder="0" />
+                </label>
+                <label class="field">
+                  <span class="field-label">Qty Ditolak</span>
+                  <input type="number" id="rtQtyTolak" min="0" placeholder="0" />
+                </label>
+              </div>
+
+              <label class="field">
+                <span class="field-label">Alasan Penolakan (wajib jika ada Qty Ditolak)</span>
+                <input type="text" id="rtAlasan" placeholder="mis. rusak, tidak sesuai, kemasan terbuka…" />
+              </label>
+
+              <div style="margin-bottom:14px;">
+                <button type="button" class="btn btn-outline" id="btnAddReturLine"><span class="material-symbols-outlined">add</span> Tambah ke Daftar</button>
+              </div>
+
+              <div class="table-scroll" style="margin-bottom:8px;">
+                <table class="data-table">
+                  <thead><tr><th>SKU</th><th>Nama Produk</th><th>Diterima</th><th>Ditolak</th><th>Alasan</th><th></th></tr></thead>
+                  <tbody id="rtLinesBody"></tbody>
+                </table>
+              </div>
+              <p class="text-muted-sm" id="rtLinesSummary" style="margin-bottom:14px;"></p>
+
+              <label class="field">
+                <span class="field-label">Catatan</span>
+                <textarea id="rtCatatan" rows="2" placeholder="Catatan tambahan (opsional)…"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <div></div>
+                <div class="form-actions-right">
+                  <button type="submit" class="btn btn-primary">Simpan Retur</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <aside class="card input-so-feed">
+            <div class="card-head"><h3>Retur Hari Ini</h3><span class="badge badge-info" id="rtTodayCount">0</span></div>
+            <div class="feed-list" id="rtTodayInputList"></div>
           </aside>
         </div>
       </section>
