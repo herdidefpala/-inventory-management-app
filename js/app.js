@@ -469,7 +469,11 @@ const PAGE_META = {
 const LAST_PAGE_KEY = 'so_app_last_page_v1';
 function getLastPage(){
   const saved = localStorage.getItem(LAST_PAGE_KEY);
-  return Object.keys(PAGE_META).includes(saved) ? saved : 'dashboard';
+  if (!Object.keys(PAGE_META).includes(saved)) return 'dashboard';
+  // Halaman khusus Admin (Audit Log, Pengaturan) tidak dipulihkan untuk akun non-Admin.
+  const navBtn = document.querySelector(`.nav-item[data-page="${saved}"]`);
+  if (navBtn && navBtn.hasAttribute('data-admin-only') && ui.role !== 'Admin') return 'dashboard';
+  return saved;
 }
 
 function goToPage(page){
@@ -1242,7 +1246,7 @@ function renderInputSO(){
   } else {
     opSelect.disabled = false;
   }
-  document.getElementById('soGudang').value = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || state.warehouses[0].id;
+  document.getElementById('soGudang').value = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || (state.warehouses[0]?.id ?? '');
   renderTodayFeed();
 }
 
@@ -1495,7 +1499,7 @@ function renderBarangMasuk(){
   } else {
     document.getElementById('bmOperator').disabled = false;
   }
-  document.getElementById('bmGudang').value = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || state.warehouses[0].id;
+  document.getElementById('bmGudang').value = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || (state.warehouses[0]?.id ?? '');
   renderBmTodayFeed();
 }
 
@@ -1679,7 +1683,7 @@ function renderBarangKeluar(){
   } else {
     document.getElementById('bkOperator').disabled = false;
   }
-  document.getElementById('bkGudang').value = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || state.warehouses[0].id;
+  document.getElementById('bkGudang').value = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || (state.warehouses[0]?.id ?? '');
   renderBkTodayFeed();
 }
 
@@ -1910,7 +1914,7 @@ function renderTransferGudang(){
   } else {
     document.getElementById('tgOperator').disabled = false;
   }
-  const asalId = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || state.warehouses[0].id;
+  const asalId = ui.currentUser.warehouse_id || state.settings.default_warehouse_id || (state.warehouses[0]?.id ?? '');
   document.getElementById('tgGudangAsal').value = asalId;
   const other = state.warehouses.find(w=>w.id !== asalId);
   if (other) document.getElementById('tgGudangTujuan').value = other.id;
@@ -3643,7 +3647,7 @@ function renderSettings(){
   document.getElementById('setCompanyName').value = state.settings.company_name;
   document.getElementById('setAppName').value = state.settings.app_name;
   fillSelect(document.getElementById('setDefaultGudang'), state.warehouses, { value:w=>w.id, label:w=>w.name, keepFirst:false });
-  document.getElementById('setDefaultGudang').value = state.settings.default_warehouse_id || state.warehouses[0].id;
+  document.getElementById('setDefaultGudang').value = state.settings.default_warehouse_id || (state.warehouses[0]?.id ?? '');
   document.getElementById('setDefaultPeriod').value = state.settings.default_period_days;
   document.getElementById('setLowStockThreshold').value = state.settings.low_stock_threshold ?? 5;
 
